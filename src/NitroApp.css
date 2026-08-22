@@ -1,0 +1,732 @@
+/* ============================================================
+   NitroSense UI Theme
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --ns-bg:          #111213;
+  --ns-bg2:         #191a1b;
+  --ns-bg3:         #1f2021;
+  --ns-panel:       #161718;
+  --ns-border:      rgba(255,255,255,0.06);
+  --ns-border2:     rgba(255,255,255,0.10);
+  --ns-red:         #e84a1a;
+  --ns-red-dim:     rgba(232,74,26,0.55);
+  --ns-red-glow:    rgba(232,74,26,0.18);
+  --ns-orange:      #f07020;
+  --ns-text:        #d8d8d8;
+  --ns-text-dim:    #7a7a7a;
+  --ns-text-bright: #ffffff;
+  --ns-text-red:    #ff6644;
+  --ns-active:      #e84a1a;
+  --ns-inactive:    #3a3a3a;
+  --ns-win-w:       930px;
+  --ns-win-h:       520px;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  background: #0c0d0e;
+}
+
+body {
+  font-family: 'Inter', 'Segoe UI', sans-serif;
+  font-size: 13px;
+  color: var(--ns-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============================================================
+   App shell — fixed small window
+   ============================================================ */
+
+.ns-shell {
+  width: var(--ns-win-w);
+  height: var(--ns-win-h);
+  min-width: var(--ns-win-w);
+  min-height: var(--ns-win-h);
+  max-width: var(--ns-win-w);
+  max-height: var(--ns-win-h);
+  background: var(--ns-bg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.8), 0 24px 60px rgba(0,0,0,0.7);
+  position: relative;
+  /* Center in browser for preview */
+  margin: 0 auto;
+}
+
+/* Subtle background texture */
+.ns-shell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 60% 40% at 50% 0%, rgba(232,74,26,0.04) 0%, transparent 70%),
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(255,255,255,0.008) 2px,
+      rgba(255,255,255,0.008) 3px
+    );
+  pointer-events: none;
+  z-index: 0;
+}
+
+.ns-shell > * { position: relative; z-index: 1; }
+
+/* ============================================================
+   Title bar
+   ============================================================ */
+
+.ns-titlebar {
+  display: flex;
+  align-items: center;
+  height: 44px;
+  background: #0e0f10;
+  border-bottom: 1px solid var(--ns-border);
+  flex-shrink: 0;
+  padding: 0 14px;
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+.ns-titlebar__acer {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--ns-text-bright);
+  text-transform: uppercase;
+  flex-shrink: 0;
+  margin-right: 18px;
+}
+
+.ns-titlebar__logo-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: var(--ns-red);
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: middle;
+  box-shadow: 0 0 6px var(--ns-red);
+}
+
+.ns-titlebar__wordmark {
+  flex: 1;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  color: var(--ns-text-bright);
+  text-transform: uppercase;
+}
+
+.ns-titlebar__wordmark span {
+  color: var(--ns-red);
+}
+
+.ns-titlebar__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+
+.ns-titlebar__icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--ns-text-dim);
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.ns-titlebar__icon-btn:hover {
+  color: var(--ns-text-bright);
+  background: rgba(255,255,255,0.08);
+}
+
+.ns-titlebar__icon-btn.close:hover {
+  color: #fff;
+  background: #e81123;
+}
+
+.ns-titlebar__win-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--ns-border2);
+  margin: 0 2px;
+}
+
+/* ============================================================
+   Body layout
+   ============================================================ */
+
+.ns-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ============================================================
+   Fan Control section (top)
+   ============================================================ */
+
+.ns-fan-section {
+  background: var(--ns-panel);
+  border-bottom: 1px solid var(--ns-border);
+  padding: 10px 14px 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.ns-fan-section__label {
+  position: absolute;
+  top: 8px;
+  left: 14px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ns-text-dim);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ns-fan-modes {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 22px;
+  min-width: 130px;
+  flex-shrink: 0;
+}
+
+.ns-fan-mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border: none;
+  background: transparent;
+  color: var(--ns-text-dim);
+  cursor: pointer;
+  border-radius: 4px;
+  text-align: left;
+  transition: color 0.15s, background 0.15s;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.ns-fan-mode-btn:hover {
+  color: var(--ns-text);
+  background: rgba(255,255,255,0.04);
+}
+
+.ns-fan-mode-btn.is-active {
+  color: var(--ns-red);
+}
+
+.ns-fan-mode-btn.is-active .ns-fan-icon path,
+.ns-fan-mode-btn.is-active .ns-fan-icon circle {
+  stroke: var(--ns-red);
+}
+
+.ns-fan-icon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+/* Custom mode sliders area */
+.ns-custom-sliders {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 22px;
+  min-width: 130px;
+  flex-shrink: 0;
+}
+
+.ns-custom-slider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--ns-text-dim);
+}
+
+.ns-custom-slider-row span { min-width: 28px; }
+
+.ns-custom-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  height: 3px;
+  background: var(--ns-bg3);
+  border-radius: 2px;
+  outline: none;
+}
+
+.ns-custom-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--ns-red);
+  cursor: pointer;
+  box-shadow: 0 0 4px var(--ns-red-dim);
+}
+
+.ns-auto-btn {
+  font-size: 10px;
+  padding: 2px 8px;
+  border: 1px solid var(--ns-red-dim);
+  background: transparent;
+  color: var(--ns-red);
+  border-radius: 2px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+.ns-auto-btn:hover { background: var(--ns-red-glow); }
+
+/* ============================================================
+   Fan dials (center)
+   ============================================================ */
+
+.ns-fan-dials {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 28px;
+  padding-top: 10px;
+}
+
+.ns-dial-group {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.ns-dial-label {
+  font-size: 13px;
+  color: var(--ns-text-dim);
+  letter-spacing: 0.04em;
+}
+
+.ns-dial-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+/* The spinning fan blade ring */
+.ns-dial {
+  position: relative;
+  width: 110px;
+  height: 110px;
+}
+
+.ns-dial__blade-ring {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.04);
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.ns-dial__blades {
+  width: 100%;
+  height: 100%;
+  animation: ns-fan-spin 3s linear infinite;
+  transform-origin: center;
+  opacity: 0.6;
+}
+
+.ns-dial__blades.is-fast {
+  animation-duration: 1.2s;
+}
+
+.ns-dial__blades.is-stopped {
+  animation-play-state: paused;
+}
+
+@keyframes ns-fan-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.ns-dial__inner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+}
+
+.ns-dial__rpm {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ns-text-bright);
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.ns-dial__unit {
+  font-size: 10px;
+  color: var(--ns-text-dim);
+  letter-spacing: 0.08em;
+}
+
+/* CoolBoost section */
+.ns-coolboost {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  padding-top: 22px;
+  flex-shrink: 0;
+  min-width: 130px;
+}
+
+.ns-coolboost__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ns-coolboost__info {
+  font-size: 11px;
+  color: var(--ns-text-dim);
+}
+
+.ns-coolboost__label {
+  font-size: 12px;
+  color: var(--ns-text);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+/* Toggle pill */
+.ns-toggle {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.ns-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.ns-toggle__slider {
+  position: absolute;
+  inset: 0;
+  background: var(--ns-inactive);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.ns-toggle__slider::before {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  left: 3px;
+  top: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+.ns-toggle input:checked + .ns-toggle__slider {
+  background: var(--ns-red);
+  box-shadow: 0 0 8px var(--ns-red-dim);
+}
+
+.ns-toggle input:checked + .ns-toggle__slider::before {
+  transform: translateX(16px);
+}
+
+/* ============================================================
+   Bottom row: Power Plan + Monitoring
+   ============================================================ */
+
+.ns-bottom {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ============================================================
+   Power Plan panel (left)
+   ============================================================ */
+
+.ns-power-panel {
+  width: 185px;
+  flex-shrink: 0;
+  background: var(--ns-bg2);
+  border-right: 1px solid var(--ns-border);
+  display: flex;
+  flex-direction: column;
+  padding: 10px 0;
+}
+
+.ns-power-panel__title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ns-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0 14px 8px;
+}
+
+.ns-power-panel__mode-label {
+  font-size: 11px;
+  color: var(--ns-text-dim);
+  padding: 0 14px 6px;
+}
+
+/* AC / Battery tab switcher */
+.ns-ac-tabs {
+  display: flex;
+  margin: 0 12px 10px;
+  background: var(--ns-bg3);
+  border-radius: 4px;
+  padding: 2px;
+  border: 1px solid var(--ns-border);
+}
+
+.ns-ac-tab {
+  flex: 1;
+  padding: 5px 8px;
+  border: none;
+  background: transparent;
+  color: var(--ns-text-dim);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background 0.15s, color 0.15s;
+  text-align: center;
+}
+
+.ns-ac-tab.is-active {
+  background: #2c2c2c;
+  color: var(--ns-text-bright);
+}
+
+/* Power profile list */
+.ns-power-list {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.ns-power-item {
+  display: flex;
+  align-items: center;
+  padding: 9px 14px;
+  border: none;
+  background: transparent;
+  color: var(--ns-text-dim);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: color 0.15s;
+  border-left: 3px solid transparent;
+}
+
+.ns-power-item:hover {
+  color: var(--ns-text);
+}
+
+.ns-power-item.is-active {
+  color: var(--ns-red);
+  border-left-color: var(--ns-red);
+}
+
+/* ============================================================
+   Monitoring panel (right)
+   ============================================================ */
+
+.ns-monitoring {
+  flex: 1;
+  min-width: 0;
+  background: var(--ns-bg);
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px;
+}
+
+.ns-monitoring__title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ns-text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+
+.ns-monitoring__subheader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 3px;
+}
+
+.ns-monitoring__axis-label {
+  font-size: 10px;
+  color: var(--ns-text-dim);
+}
+
+.ns-monitoring__minmax {
+  font-size: 10px;
+  color: var(--ns-text-dim);
+}
+
+.ns-chart-row {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 8px;
+}
+
+.ns-chart-row:last-child { margin-bottom: 0; }
+
+.ns-chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+.ns-chart-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ns-text-dim);
+  letter-spacing: 0.05em;
+}
+
+.ns-chart-minmax {
+  font-size: 10px;
+  color: var(--ns-text-dim);
+}
+
+.ns-chart-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  position: relative;
+  gap: 8px;
+}
+
+.ns-chart-canvas-wrap {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  background: #0d0d0d;
+  border: 1px solid rgba(255,80,0,0.12);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.ns-chart-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.ns-chart-readouts {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 44px;
+}
+
+.ns-chart-readout-temp {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ns-text-red);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.ns-chart-readout-load {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f07020;
+  line-height: 1;
+}
+
+/* ============================================================
+   Fan section divider line
+   ============================================================ */
+
+.ns-fan-divider {
+  width: 1px;
+  height: 80px;
+  background: var(--ns-border);
+  margin: 0 8px;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   Scrollbar theme
+   ============================================================ */
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
+
+/* ============================================================
+   Animations
+   ============================================================ */
+
+@keyframes ns-glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--ns-red-glow); }
+  50%       { box-shadow: 0 0 12px 4px var(--ns-red-glow); }
+}
+
+.ns-fan-mode-btn.is-active {
+  animation: ns-glow-pulse 2.4s ease-in-out infinite;
+}
