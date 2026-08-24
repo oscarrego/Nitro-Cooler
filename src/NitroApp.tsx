@@ -1,9 +1,11 @@
 /**
- * NitroSense UI — pixel-accurate replica of the Acer NitroSense interface
- * All Tauri backend calls (fan / power apply) are wired through original handlers.
+ * NITRO COOLER — Production UI
+ * • Fan/power changes persist to disk via saveControlSnapshot
+ * • Settings survive app close and restore on next launch via bootstrap
+ * • Custom fan mode shows horizontal sliders with +/- controls
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import './NitroApp.css'
 import {
@@ -13,620 +15,550 @@ import {
   getBackendBootstrap,
   getBackendPollSnapshot,
   saveControlSnapshot,
-  type CapabilitySnapshot,
-  type ControlSnapshot,
   type BootArtId,
+  type ControlSnapshot,
   type CustomPowerBaseId,
   type GpuTuningState,
   type LiveControlSnapshot,
   type TelemetrySnapshot,
 } from './lib/backend'
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────────────────────
-type FanProfileId   = 'auto' | 'max' | 'custom'
-type PowerProfileId = 'battery-guard' | 'balanced' | 'performance' | 'turbo' | 'custom'
-type UpdateChannel  = 'stable' | 'preview'
-type CurvePoint     = { temp: number; speed: number }
-type CurveSet       = { cpu: CurvePoint[]; gpu: CurvePoint[] }
+// ─── Types ────────────────────────────────────────────────────────────────────
+type FanProfile   = 'auto' | 'max' | 'custom'
+type PowerProfile = 'battery-guard' | 'balanced' | 'performance' | 'turbo' | 'custom'
+type AcMode       = 'ac' | 'battery'
+type UpdateCh     = 'stable' | 'preview'
+type Pt           = { temp: number; speed: number }
+type Curves       = { cpu: Pt[]; gpu: Pt[] }
 
+// ─── Constants ─────────────────────────────────────────────────────────────────
+const POLL_MS  = 1000
+const HIDPOLL  = 5000
+const FAN_TO   = 15_000
+const GLEN     = 140
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Constants
-// ─────────────────────────────────────────────────────────────────────────────
-const POLL_MS        = 1000
-const HIDDEN_POLL_MS = 5000
-const FAN_TIMEOUT_MS = 15_000
-const GRAPH_LEN      = 140      // number of history samples
-
-const POWER_PLANS: { id: PowerProfileId; label: string }[] = [
+const PLANS: { id: PowerProfile; label: string }[] = [
   { id: 'battery-guard', label: 'Power Saver' },
   { id: 'balanced',      label: 'Balance' },
   { id: 'performance',   label: 'Balance\n[Acer Optimized]' },
   { id: 'turbo',         label: 'High-Performance' },
 ]
 
-const DEFAULT_CURVES: CurveSet = {
-  cpu: [{ temp: 30, speed: 2 }, { temp: 49, speed: 2 }, { temp: 65, speed: 22 }, { temp: 74, speed: 64 }, { temp: 80, speed: 100 }],
-  gpu: [{ temp: 30, speed: 2 }, { temp: 49, speed: 2 }, { temp: 65, speed: 22 }, { temp: 74, speed: 64 }, { temp: 80, speed: 100 }],
+const DEF_CURVES: Curves = {
+  cpu: [{ temp:30,speed:2},{temp:49,speed:2},{temp:65,speed:22},{temp:74,speed:64},{temp:80,speed:100}],
+  gpu: [{ temp:30,speed:2},{temp:49,speed:2},{temp:65,speed:22},{temp:74,speed:64},{temp:80,speed:100}],
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
-function isDesktopRuntime() {
-  return Boolean((window as Window & { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__)
-}
-
-function clamp(v: number, lo: number, hi: number) { return Math.min(hi, Math.max(lo, v)) }
-
-function describeError(e: unknown) {
-  if (e instanceof Error) return e.message
-  if (typeof e === 'string') return e
-  try { return JSON.stringify(e) } catch { return 'Unknown error' }
-}
+// ─── Helpers ───────────────────────────────────────────────────────────────────
+const isTauri = () => Boolean((window as any).__TAURI_INTERNALS__)
+const clamp   = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
+const errMsg  = (e: unknown) => e instanceof Error ? e.message : String(e)
 
 function waitPaint() {
-  return new Promise<void>(r => {
-    if (!window.requestAnimationFrame) { setTimeout(r, 0); return }
-    requestAnimationFrame(() => requestAnimationFrame(() => r()))
+  return new Promise<void>(res => {
+    if (!window.requestAnimationFrame) { setTimeout(res, 0); return }
+    requestAnimationFrame(() => requestAnimationFrame(() => res()))
   })
 }
 
-function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
-  let tid: number | null = null
-  const t = new Promise<T>((_, rej) => {
-    tid = window.setTimeout(() => rej(new Error(`${label} timed out`)), ms)
-  })
-  return Promise.race([p, t]).finally(() => { if (tid) clearTimeout(tid) })
+function withTo<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  let t: number | null = null
+  const to = new Promise<T>((_, rej) => { t = window.setTimeout(() => rej(new Error(`${label} timeout`)), ms) })
+  return Promise.race([p, to]).finally(() => { if (t) clearTimeout(t) })
 }
 
-function presentPos(v: number | null | undefined) { return v != null && v > 0 ? v : null }
-
-function hasUsableTelemetry(s: TelemetrySnapshot | null | undefined) {
-  return Boolean(s && (s.cpuTempC > 0 || s.gpuTempC > 0 || s.cpuFanRpm > 0 || s.gpuFanRpm > 0))
+function hasData(s: TelemetrySnapshot | null | undefined) {
+  return Boolean(s && (s.cpuTempC > 0 || s.cpuFanRpm > 0))
 }
 
-function fromBackendCurves(c: ControlSnapshot['fanCurves']): CurveSet {
+function fromCurves(c: ControlSnapshot['fanCurves']): Curves {
   return {
     cpu: c.cpu.map(p => ({ temp: p.tempC, speed: p.speedPercent })),
     gpu: c.gpu.map(p => ({ temp: p.tempC, speed: p.speedPercent })),
   }
 }
 
-function toBackendCurves(c: CurveSet): ControlSnapshot['fanCurves'] {
+function toCurves(c: Curves): ControlSnapshot['fanCurves'] {
   return {
     cpu: c.cpu.map(p => ({ tempC: p.temp, speedPercent: p.speed })),
     gpu: c.gpu.map(p => ({ tempC: p.temp, speedPercent: p.speed })),
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Canvas graph — matches NitroSense spike/waveform style
-// ─────────────────────────────────────────────────────────────────────────────
-function drawGraph(canvas: HTMLCanvasElement, tempHist: number[], loadHist: number[]) {
+// ─── Fan Ring SVG ──────────────────────────────────────────────────────────────
+function FanRing({ active, size = 138 }: { active: boolean; size?: number }) {
+  const cx = size / 2, cy = size / 2
+  const OR = size / 2 - 2    // outer
+  const TR = OR - 11          // tooth inner
+  const BR = OR - 14          // blade reach
+  const HR = size * 0.10      // hub
+  const N  = 58               // teeth
+  const B  = 6                // blades
+  const id = `fg${active ? 'a' : 'i'}${size}`
+
+  // Teeth — arc segments
+  const teeth: string[] = []
+  const tf = 0.66
+  for (let i = 0; i < N; i++) {
+    const a0 = (i / N) * Math.PI * 2
+    const a1 = a0 + (tf / N) * Math.PI * 2
+    const x0o = cx + OR * Math.cos(a0), y0o = cy + OR * Math.sin(a0)
+    const x1o = cx + OR * Math.cos(a1), y1o = cy + OR * Math.sin(a1)
+    const x1i = cx + TR * Math.cos(a1), y1i = cy + TR * Math.sin(a1)
+    const x0i = cx + TR * Math.cos(a0), y0i = cy + TR * Math.sin(a0)
+    const la = tf / N > 0.5 ? 1 : 0
+    teeth.push(`M${x0o},${y0o} A${OR},${OR} 0 ${la} 1 ${x1o},${y1o} L${x1i},${y1i} A${TR},${TR} 0 ${la} 0 ${x0i},${y0i}Z`)
+  }
+
+  // Blades — swept curved shapes
+  const blades: string[] = []
+  for (let i = 0; i < B; i++) {
+    const base  = (i / B) * Math.PI * 2
+    const sweep = 0.73
+    const tip   = base + sweep
+    const sx = cx + (HR + 2) * Math.cos(base), sy = cy + (HR + 2) * Math.sin(base)
+    const tx = cx + (BR - 3) * Math.cos(tip),  ty = cy + (BR - 3) * Math.sin(tip)
+    const m1 = base + sweep * 0.35, m2 = base + sweep * 0.70
+    const c1x = cx + BR * 0.52 * Math.cos(m1), c1y = cy + BR * 0.52 * Math.sin(m1)
+    const c2x = cx + BR * 0.83 * Math.cos(m2), c2y = cy + BR * 0.83 * Math.sin(m2)
+    const te  = base - 0.14
+    const tex = cx + (HR + 2) * Math.cos(te), tey = cy + (HR + 2) * Math.sin(te)
+    const q1x = cx + BR * 0.44 * Math.cos(m1 - 0.08), q1y = cy + BR * 0.44 * Math.sin(m1 - 0.08)
+    blades.push(`M${sx},${sy} C${c1x},${c1y} ${c2x},${c2y} ${tx},${ty} Q${q1x},${q1y} ${tex},${tey}Z`)
+  }
+
+  return (
+    <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} style={{ display: 'block' }}>
+      <defs>
+        <filter id={id} x="-25%" y="-25%" width="150%" height="150%">
+          <feGaussianBlur stdDeviation={active ? '2.5' : '0'} result="blur" />
+          <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
+        {active && (
+          <radialGradient id={`rg${size}`} cx="50%" cy="50%" r="50%">
+            <stop offset="0%"   stopColor="rgba(255,90,20,0.15)" />
+            <stop offset="65%"  stopColor="rgba(200,55,0,0.07)" />
+            <stop offset="100%" stopColor="rgba(0,0,0,0)" />
+          </radialGradient>
+        )}
+      </defs>
+
+      {/* Disc background */}
+      <circle cx={cx} cy={cy} r={OR - 1} fill="#0d0d0d" />
+
+      {/* Radial glow fill */}
+      {active && <circle cx={cx} cy={cy} r={OR - 1} fill={`url(#rg${size})`} />}
+
+      {/* Outer glow rings */}
+      {active ? <>
+        <circle cx={cx} cy={cy} r={OR - 2}  fill="none" stroke="rgba(225,75,10,0.6)"  strokeWidth="2.5" filter={`url(#${id})`} />
+        <circle cx={cx} cy={cy} r={OR - 7}  fill="none" stroke="rgba(180,50,0,0.25)"  strokeWidth="5" />
+        <circle cx={cx} cy={cy} r={TR}      fill="none" stroke="rgba(140,38,0,0.18)"  strokeWidth="3" />
+      </> : <>
+        <circle cx={cx} cy={cy} r={OR - 2} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="1.5" />
+      </>}
+
+      {/* Teeth */}
+      {teeth.map((d, i) => (
+        <path key={i} d={d}
+          fill={active
+            ? (i % 2 === 0 ? 'rgba(255,105,25,0.88)' : 'rgba(205,65,10,0.68)')
+            : (i % 2 === 0 ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.07)')}
+          filter={active ? `url(#${id})` : undefined}
+        />
+      ))}
+
+      {/* Blades */}
+      {blades.map((d, i) => (
+        <path key={i} d={d}
+          fill={active ? '#2b0e04' : '#1c1c1c'}
+          stroke={active ? 'rgba(255,90,20,0.38)' : 'rgba(255,255,255,0.07)'}
+          strokeWidth="0.8"
+        />
+      ))}
+
+      {/* Hub */}
+      <circle cx={cx} cy={cy} r={HR}
+        fill={active ? '#190905' : '#161616'}
+        stroke={active ? 'rgba(255,80,20,0.58)' : 'rgba(255,255,255,0.08)'}
+        strokeWidth="1.5"
+        filter={active ? `url(#${id})` : undefined}
+      />
+      <circle cx={cx} cy={cy} r={4} fill={active ? '#e84a1a' : '#2a2a2a'} filter={active ? `url(#${id})` : undefined} />
+    </svg>
+  )
+}
+
+// ─── Fan Mode Icon ─────────────────────────────────────────────────────────────
+function FanIcon({ on }: { on: boolean }) {
+  const cx = 14, cy = 14
+  const blades: string[] = []
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2
+    const a2 = a + 0.54, am = a + 0.28
+    const sx = cx + 4 * Math.cos(a),  sy = cy + 4 * Math.sin(a)
+    const tx = cx + 10 * Math.cos(a2), ty = cy + 10 * Math.sin(a2)
+    const qx = cx + 8 * Math.cos(am), qy = cy + 8 * Math.sin(am)
+    blades.push(`M${cx},${cy} L${sx},${sy} Q${qx},${qy} ${tx},${ty}Z`)
+  }
+  const col = on ? '#e84a1a' : '#555'
+  return (
+    <svg viewBox="0 0 28 28" width={28} height={28} className="nc-ficon">
+      <circle cx={cx} cy={cy} r={12} fill="none" stroke={on ? 'rgba(232,74,26,0.55)' : '#2e2e2e'} strokeWidth="1.2" />
+      {blades.map((d, i) => <path key={i} d={d} fill={col} opacity={0.9} />)}
+      <circle cx={cx} cy={cy} r={3} fill={col} />
+    </svg>
+  )
+}
+
+// ─── Monitoring Graph ──────────────────────────────────────────────────────────
+// Draws NitroSense-style dense vertical-bar + smooth temp line
+function drawChart(canvas: HTMLCanvasElement, tempH: number[], loadH: number[]) {
   const ctx = canvas.getContext('2d')
   if (!ctx) return
   const W = canvas.width, H = canvas.height
-  ctx.clearRect(0, 0, W, H)
 
-  // Dark background
-  ctx.fillStyle = '#0f0f0f'
+  ctx.fillStyle = '#090909'
   ctx.fillRect(0, 0, W, H)
 
-  // Subtle vertical grid lines
-  ctx.strokeStyle = 'rgba(255,60,0,0.07)'
+  // Grid
+  ctx.strokeStyle = 'rgba(200,50,0,0.06)'
   ctx.lineWidth = 1
   for (let i = 1; i < 8; i++) {
-    const x = Math.round((W / 8) * i)
+    const x = Math.round((W * i) / 8)
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke()
   }
 
-  const N = tempHist.length
+  const N    = tempH.length
   if (N < 2) return
+  const step = W / GLEN
 
-  // Step per sample
-  const step = W / (GRAPH_LEN - 1)
+  // Phase 1 — load bars (dark fill from bottom)
+  for (let i = 0; i < N; i++) {
+    const x  = Math.round((i + GLEN - N) * step)
+    const lv = loadH[i] ?? 0
+    if (lv <= 0) continue
+    const lh = Math.round(clamp(lv / 100, 0, 1) * H * 0.72)
+    if (lh < 1) continue
+    const g = ctx.createLinearGradient(0, H, 0, H - lh)
+    g.addColorStop(0,   'rgba(100,28,0,0.5)')
+    g.addColorStop(0.5, 'rgba(165,55,0,0.65)')
+    g.addColorStop(1,   'rgba(210,78,10,0.72)')
+    ctx.fillStyle = g
+    ctx.fillRect(x, H - lh, Math.max(1, Math.round(step * 0.76)), lh)
+  }
 
-  // — Draw load % as filled area (dark orange, behind) —
+  // Phase 2 — temp spikes (bright vertical lines)
+  for (let i = 0; i < N; i++) {
+    const x  = Math.round((i + GLEN - N) * step)
+    const tv = tempH[i] ?? 0
+    if (tv <= 20) continue
+    const th = Math.round(clamp((tv - 20) / 80, 0, 1) * H)
+    if (th < 1) continue
+    const g = ctx.createLinearGradient(0, H, 0, H - th)
+    g.addColorStop(0,   'rgba(120,35,0,0.0)')
+    g.addColorStop(0.4, 'rgba(200,70,5,0.55)')
+    g.addColorStop(0.8, 'rgba(245,115,15,0.88)')
+    g.addColorStop(1,   'rgba(255,165,45,1)')
+    ctx.strokeStyle = g
+    ctx.lineWidth   = 1
+    ctx.beginPath(); ctx.moveTo(x, H); ctx.lineTo(x, H - th); ctx.stroke()
+  }
+
+  // Phase 3 — smooth temperature line
   ctx.beginPath()
   for (let i = 0; i < N; i++) {
-    const x = (i + (GRAPH_LEN - N)) * step
-    const y = H - clamp(loadHist[i] / 100, 0, 1) * H
+    const x = (i + GLEN - N) * step
+    const y = H - clamp((tempH[i] - 20) / 80, 0, 1) * H
     if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
   }
-  ctx.lineTo((GRAPH_LEN - 1) * step, H)
-  ctx.lineTo((GRAPH_LEN - N) * step, H)
-  ctx.closePath()
-  const loadGrad = ctx.createLinearGradient(0, 0, 0, H)
-  loadGrad.addColorStop(0, 'rgba(200,70,0,0.55)')
-  loadGrad.addColorStop(1, 'rgba(100,20,0,0.2)')
-  ctx.fillStyle = loadGrad
-  ctx.fill()
-
-  // — Draw temp spikes as individual vertical lines (NitroSense "spike" look) —
-  // First draw dense spike lines
-  for (let i = 0; i < N; i++) {
-    const x = Math.round((i + (GRAPH_LEN - N)) * step)
-    const normTemp = clamp((tempHist[i] - 20) / 80, 0, 1)   // 20°=0%, 100°=100%
-    const spikeH = normTemp * H
-
-    // Spike line: gradient from bottom
-    const spkGrad = ctx.createLinearGradient(0, H, 0, H - spikeH)
-    spkGrad.addColorStop(0, 'rgba(220,80,0,0.0)')
-    spkGrad.addColorStop(0.4, 'rgba(230,100,0,0.4)')
-    spkGrad.addColorStop(1, 'rgba(255,130,20,0.9)')
-    ctx.strokeStyle = spkGrad
-    ctx.lineWidth = 1.5
-    ctx.beginPath()
-    ctx.moveTo(x, H)
-    ctx.lineTo(x, H - spikeH)
-    ctx.stroke()
-  }
-
-  // — Draw temperature as smooth line on top —
-  ctx.beginPath()
-  for (let i = 0; i < N; i++) {
-    const x = (i + (GRAPH_LEN - N)) * step
-    const normTemp = clamp((tempHist[i] - 20) / 80, 0, 1)
-    const y = H - normTemp * H
-    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
-  }
-  ctx.strokeStyle = 'rgba(255,160,40,0.85)'
-  ctx.lineWidth = 1.5
-  ctx.stroke()
-
-  // thin bright highlight on top of temp line
-  ctx.beginPath()
-  for (let i = 0; i < N; i++) {
-    const x = (i + (GRAPH_LEN - N)) * step
-    const normTemp = clamp((tempHist[i] - 20) / 80, 0, 1)
-    const y = H - normTemp * H
-    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
-  }
-  ctx.strokeStyle = 'rgba(255,210,120,0.6)'
-  ctx.lineWidth = 0.7
+  ctx.strokeStyle = 'rgba(255,165,55,0.78)'
+  ctx.lineWidth   = 1.5
   ctx.stroke()
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Fan blade SVG — matches the NitroSense fan ring aesthetic
-// ─────────────────────────────────────────────────────────────────────────────
-function FanRingSVG({ active, fast }: { active: boolean; fast?: boolean }) {
-  const cx = 65, cy = 65, R = 63, innerR = 22
-  const bladeCount = 7
-  const toothCount = 54    // outer teeth ring
-
-  // Outer serrated ring — many small "tooth" segments
-  const teeth: string[] = []
-  for (let i = 0; i < toothCount; i++) {
-    const a1 = ((i * 2 * Math.PI) / toothCount) - Math.PI / toothCount
-    const a2 = ((i * 2 * Math.PI) / toothCount) + Math.PI / toothCount
-    const outerR = R
-    const innerT = R - (i % 2 === 0 ? 4 : 6)
-    const x1 = cx + Math.cos(a1) * outerR, y1 = cy + Math.sin(a1) * outerR
-    const x2 = cx + Math.cos(a2) * outerR, y2 = cy + Math.sin(a2) * outerR
-    const x3 = cx + Math.cos(a2) * innerT, y3 = cy + Math.sin(a2) * innerT
-    const x4 = cx + Math.cos(a1) * innerT, y4 = cy + Math.sin(a1) * innerT
-    teeth.push(`M${x1},${y1} L${x2},${y2} L${x3},${y3} L${x4},${y4}Z`)
-  }
-
-  // Fan blades — swept curved shapes
-  const blades: { d: string; key: number }[] = []
-  for (let i = 0; i < bladeCount; i++) {
-    const baseAngle = (i / bladeCount) * 2 * Math.PI
-    const sweepAngle = 0.65   // radians of sweep
-    const tipAngle  = baseAngle + sweepAngle
-    const midAngle  = baseAngle + sweepAngle * 0.5
-
-    const innerEdge = innerR + 2
-    const outerEdge = R - 10
-
-    const sx = cx + Math.cos(baseAngle) * innerEdge
-    const sy = cy + Math.sin(baseAngle) * innerEdge
-    const tx = cx + Math.cos(tipAngle) * (outerEdge * 0.8)
-    const ty = cy + Math.sin(tipAngle) * (outerEdge * 0.8)
-    const c1x = cx + Math.cos(midAngle) * (outerEdge * 0.55)
-    const c1y = cy + Math.sin(midAngle) * (outerEdge * 0.55)
-    const c2x = cx + Math.cos(tipAngle - 0.18) * (outerEdge * 0.7)
-    const c2y = cy + Math.sin(tipAngle - 0.18) * (outerEdge * 0.7)
-
-    // Wide blade (main shape)
-    const wb = baseAngle - 0.18
-    const wx = cx + Math.cos(wb) * innerEdge
-    const wy = cy + Math.sin(wb) * innerEdge
-    blades.push({
-      key: i,
-      d: `M${cx},${cy} L${sx},${sy} C${c1x},${c1y} ${c2x},${c2y} ${tx},${ty} L${wx},${wy}Z`,
-    })
-  }
-
-  const bladeColor   = active ? '#2a1008' : '#222'
-  const bladeBorder  = active ? 'rgba(232,74,26,0.25)' : 'rgba(255,255,255,0.1)'
-  const toothColor   = active ? 'rgba(200,60,10,0.5)' : 'rgba(255,255,255,0.07)'
-  const toothBright  = active ? 'rgba(255,100,30,0.7)' : 'rgba(255,255,255,0.18)'
-
-  return (
-    <svg viewBox="0 0 130 130" width={130} height={130}>
-      {/* Background disc */}
-      <circle cx={cx} cy={cy} r={R - 1} fill="#111" />
-
-      {/* Teeth ring */}
-      {teeth.map((d, i) => (
-        <path key={i} d={d} fill={i % 2 === 0 ? toothBright : toothColor} />
-      ))}
-
-      {/* Blade fill */}
-      {blades.map(b => (
-        <path key={b.key} d={b.d} fill={bladeColor} stroke={bladeBorder} strokeWidth="0.7" />
-      ))}
-
-      {/* Center hub */}
-      <circle cx={cx} cy={cy} r={innerR}
-        fill={active ? '#1a0805' : '#1a1a1a'}
-        stroke={active ? 'rgba(232,74,26,0.4)' : 'rgba(255,255,255,0.08)'}
-        strokeWidth="1.5" />
-
-      {/* Center dot */}
-      <circle cx={cx} cy={cy} r={5}
-        fill={active ? 'rgba(232,74,26,0.7)' : '#333'} />
-
-      {/* Outer glow ring when active */}
-      {active && (
-        <>
-          <circle cx={cx} cy={cy} r={R - 1} fill="none"
-            stroke="rgba(232,74,26,0.18)" strokeWidth="3" />
-          <circle cx={cx} cy={cy} r={R + 1} fill="none"
-            stroke="rgba(232,74,26,0.08)" strokeWidth="2" />
-        </>
-      )}
-    </svg>
-  )
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Fan mode icon (small, for sidebar buttons)
-// ─────────────────────────────────────────────────────────────────────────────
-function FanModeIcon({ active }: { active: boolean }) {
-  const cx = 14, cy = 14, R = 12
-  const blades = 6
-  const bladeColor = active ? '#e84a1a' : '#4a4a4a'
-  const paths: string[] = []
-  for (let i = 0; i < blades; i++) {
-    const a  = (i / blades) * 2 * Math.PI
-    const a2 = a + 0.55
-    const am = a + 0.28
-    const s = { x: cx + Math.cos(a) * 4, y: cy + Math.sin(a) * 4 }
-    const t = { x: cx + Math.cos(a2) * 10, y: cy + Math.sin(a2) * 10 }
-    const c = { x: cx + Math.cos(am) * 8, y: cy + Math.sin(am) * 8 }
-    paths.push(`M${cx},${cy} L${s.x},${s.y} Q${c.x},${c.y} ${t.x},${t.y}Z`)
-  }
-  return (
-    <svg viewBox="0 0 28 28" width={28} height={28} className="ns-mode-icon">
-      <circle cx={cx} cy={cy} r={R} fill="none"
-        stroke={active ? 'rgba(232,74,26,0.5)' : '#333'} strokeWidth="1.2" />
-      {paths.map((d, i) => <path key={i} d={d} fill={bladeColor} opacity={0.85} />)}
-      <circle cx={cx} cy={cy} r={3} fill={active ? '#e84a1a' : '#333'} />
-    </svg>
-  )
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Chart Row component
-// ─────────────────────────────────────────────────────────────────────────────
-function ChartRow({
-  label, tempHist, loadHist, currentTemp, currentLoad, minT, maxT,
-}: {
-  label: string
-  tempHist: number[]
-  loadHist: number[]
-  currentTemp: number | null
-  currentLoad: number | null
-  minT: number
-  maxT: number
-}) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const wrapRef   = useRef<HTMLDivElement | null>(null)
+// ─── Chart Row Component ───────────────────────────────────────────────────────
+function ChartRow({ label, tempH, loadH, curT, curL, minT, maxT }:
+  { label: string; tempH: number[]; loadH: number[]; curT: number|null; curL: number|null; minT: number; maxT: number }) {
+  const canRef  = useRef<HTMLCanvasElement | null>(null)
+  const wrapRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
-    const canvas = canvasRef.current
-    const wrap   = wrapRef.current
-    if (!canvas || !wrap) return
+    const cv = canRef.current, wr = wrapRef.current
+    if (!cv || !wr) return
     const dpr = window.devicePixelRatio || 1
-    const { width: w, height: h } = wrap.getBoundingClientRect()
-    canvas.width  = Math.round(w * dpr)
-    canvas.height = Math.round(h * dpr)
-    const ctx = canvas.getContext('2d')
+    const { width: w, height: h } = wr.getBoundingClientRect()
+    cv.width  = Math.round(w * dpr)
+    cv.height = Math.round(h * dpr)
+    const ctx = cv.getContext('2d')
     ctx?.scale(dpr, dpr)
-    drawGraph(canvas, tempHist, loadHist)
-  }, [tempHist, loadHist])
+    drawChart(cv, tempH, loadH)
+  }, [tempH, loadH])
 
   return (
-    <div className="ns-chart-row">
-      <div className="ns-chart-subheader">
-        <span className="ns-chart-minmax">
-          {minT > 0 ? `Min : ${minT}°  Max : ${maxT}°` : '\u00a0'}
-        </span>
+    <div className="nc-chart">
+      <div className="nc-chart__mm">
+        {minT > 0 ? `Min : ${minT}°  Max : ${maxT}°` : '\u00a0'}
       </div>
-      <div className="ns-chart-body">
-        <div className="ns-chart-wrap" ref={wrapRef}>
-          <span className="ns-chart-inline-label">{label}</span>
-          <canvas className="ns-chart-canvas" ref={canvasRef} />
+      <div className="nc-chart__body">
+        <div className="nc-chart__wrap" ref={wrapRef}>
+          <span className="nc-chart__lbl">{label}</span>
+          <canvas ref={canRef} />
         </div>
-        <div className="ns-chart-readouts">
-          <span className="ns-chart-temp">{currentTemp != null ? `${currentTemp}°` : '--°'}</span>
-          <span className="ns-chart-load">{currentLoad != null ? `${currentLoad} %` : '--'}</span>
+        <div className="nc-chart__vals">
+          <span className="nc-chart__t">{curT != null ? `${curT}°` : '--°'}</span>
+          <span className="nc-chart__l">{curL != null ? `${curL} %` : '-- %'}</span>
         </div>
       </div>
     </div>
   )
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Main App
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Main App ──────────────────────────────────────────────────────────────────
 export default function NitroApp() {
 
-  // ── UI state ──────────────────────────────────────────────────────────────
-  const [fanProfile,   setFanProfile]   = useState<FanProfileId>('auto')
-  const [powerProfile, setPowerProfile] = useState<PowerProfileId>('battery-guard')
-  const [acMode,       setAcMode]       = useState<'ac' | 'battery'>('ac')
+  // UI state
+  const [fanProfile,   setFanProfile]   = useState<FanProfile>('auto')
+  const [powerProfile, setPowerProfile] = useState<PowerProfile>('battery-guard')
+  const [acMode,       setAcMode]       = useState<AcMode>('ac')
   const [coolBoost,    setCoolBoost]    = useState(false)
   const [cpuSlider,    setCpuSlider]    = useState(50)
   const [gpuSlider,    setGpuSlider]    = useState(50)
   const [statusMsg,    setStatusMsg]    = useState('')
 
-  // ── Backend / telemetry state ─────────────────────────────────────────────
-  const [liveTelemetry,      setLiveTelemetry]      = useState<TelemetrySnapshot | null>(null)
-  const [liveControls,       setLiveControls]       = useState<LiveControlSnapshot | null>(null)
-  const [serviceConnected,   setServiceConnected]   = useState(false)
-  const [capabilities,       setCapabilities]       = useState<CapabilitySnapshot | null>(null)
+  // Backend state
+  const [liveTel,  setLiveTel]  = useState<TelemetrySnapshot | null>(null)
+  const [, setLiveCtrl] = useState<LiveControlSnapshot | null>(null)
 
-  // ── Monitoring history ────────────────────────────────────────────────────
-  const [cpuTempH, setCpuTempH] = useState<number[]>([])
-  const [cpuLoadH, setCpuLoadH] = useState<number[]>([])
-  const [gpuTempH, setGpuTempH] = useState<number[]>([])
-  const [gpuLoadH, setGpuLoadH] = useState<number[]>([])
+  // Monitoring history
+  const [cpuTH, setCpuTH] = useState<number[]>([])
+  const [cpuLH, setCpuLH] = useState<number[]>([])
+  const [gpuTH, setGpuTH] = useState<number[]>([])
+  const [gpuLH, setGpuLH] = useState<number[]>([])
   const [cpuMin, setCpuMin] = useState(0)
   const [cpuMax, setCpuMax] = useState(0)
   const [gpuMin, setGpuMin] = useState(0)
   const [gpuMax, setGpuMax] = useState(0)
 
-  // ── Persistence state (kept for backend save calls) ───────────────────────
-  const [customCurves, setCustomCurves]               = useState<CurveSet>(DEFAULT_CURVES)
-  const [customPowerBase, setCustomPowerBase]         = useState<CustomPowerBaseId>('performance')
-  const [customProcessorState, setCustomProcessorState] = useState({ min: 35, max: 88 })
-  const [gpuTuning, setGpuTuning]                     = useState<GpuTuningState>({ coreClockMhz: 165, memoryClockMhz: 420, voltageOffsetMv: -35, powerLimitPercent: 114, tempLimitC: 83 })
-  const [fanSyncLock, setFanSyncLock]                 = useState(false)
-  const [smartCharging, setSmartCharging]             = useState(true)
-  const [processorCtrl, setProcessorCtrl]             = useState(true)
-  const [nvidiaTelemetry, setNvidiaTelemetry]         = useState(true)
-  const [keepWarmed, setKeepWarmed]                   = useState(false)
-  const [usbPower, setUsbPower]                       = useState(true)
-  const [blueLightFilter, setBlueLightFilter]         = useState(false)
-  const [autoRefreshBattery, setAutoRefreshBattery]   = useState(false)
-  const [autoRefreshHz, setAutoRefreshHz]             = useState<number | null>(null)
-  const [bootArt, setBootArt]                         = useState('ember')
-  const [bootFile, setBootFile]                       = useState('custom-boot.png')
-  const [updateCh, setUpdateCh]                       = useState<UpdateChannel>('stable')
-  const [updateOnLaunch, setUpdateOnLaunch]           = useState(true)
-  const [activeOcSlot, setActiveOcSlot]               = useState('daily')
-  const [ocApplyState, setOcApplyState]               = useState<'staged' | 'live'>('live')
-  const [ocLocked, setOcLocked]                       = useState(false)
+  // Persistence state (held for saveControlSnapshot)
+  const [, setCurves]      = useState<Curves>(DEF_CURVES)
+  const [custPBase,   setCustPBase]   = useState<CustomPowerBaseId>('performance')
+  const [custPState,  setCustPState]  = useState({ min: 35, max: 88 })
+  const [gpuTuning,   setGpuTuning]   = useState<GpuTuningState>({ coreClockMhz:165, memoryClockMhz:420, voltageOffsetMv:-35, powerLimitPercent:114, tempLimitC:83 })
+  const [fanSync,     setFanSync]     = useState(false)
+  const [smartChg,    setSmartChg]    = useState(true)
+  const [pCtrl,       setPCtrl]       = useState(true)
+  const [nvTel,       setNvTel]       = useState(true)
+  const [keepWarm,    setKeepWarm]    = useState(false)
+  const [usbPwr,      setUsbPwr]      = useState(true)
+  const [blFilter,    setBlFilter]    = useState(false)
+  const [arBat,       setArBat]       = useState(false)
+  const [arHz,        setArHz]        = useState<number | null>(null)
+  const [bootArt,     setBootArt]     = useState('ember')
+  const [bootFile,    setBootFile]    = useState('custom-boot.png')
+  const [updateCh]                    = useState<UpdateCh>('stable')
+  const [updOnLaunch, setUpdOnLaunch] = useState(true)
+  const [ocSlot,      setOcSlot]      = useState('daily')
+  const [ocState,     setOcState]     = useState<'staged'|'live'>('live')
+  const [ocLocked,    setOcLocked]    = useState(false)
 
-  // ── Refs (don't trigger re-renders) ──────────────────────────────────────
-  const svcRef       = useRef(false)
-  const fanApplyRef  = useRef(false)
-  const pwrApplyRef  = useRef(false)
-  const ctrlCount    = useRef(0)
-  const qFanRef      = useRef<FanProfileId | null>(null)
-  const qPwrRef      = useRef<PowerProfileId | null>(null)
-  const curvesRef    = useRef<CurveSet>(DEFAULT_CURVES)
-  const telRef       = useRef<string | null>(null)
-  const liveRef      = useRef<string | null>(null)
-  const liveObjRef   = useRef<LiveControlSnapshot | null>(null)
-  const pollRef      = useRef(false)
+  // Refs
+  const svcRef   = useRef(false)
+  const fanRef   = useRef(false)
+  const pwrRef   = useRef(false)
+  const ctlN     = useRef(0)
+  const qFan     = useRef<FanProfile | null>(null)
+  const qPwr     = useRef<PowerProfile | null>(null)
+  const curvesR  = useRef<Curves>(DEF_CURVES)
+  const telSnap  = useRef<string | null>(null)
+  const liveSnap = useRef<string | null>(null)
+  const liveObj  = useRef<LiveControlSnapshot | null>(null)
+  const polling  = useRef(false)
 
-  // ── Derive displayed values ───────────────────────────────────────────────
-  const tel          = hasUsableTelemetry(liveTelemetry) ? liveTelemetry : null
-  const displayCpuT  = presentPos(tel?.cpuTempAverageC ?? tel?.cpuTempC ?? null)
-  const displayGpuT  = presentPos(tel?.gpuTempC ?? null)
-  const displayCpuU  = tel?.cpuUsagePercent ?? null
-  const displayGpuU  = tel?.gpuUsagePercent ?? null
-  const displayCpuRpm = presentPos(tel?.cpuFanRpm ?? null)
-  const displayGpuRpm = presentPos(tel?.gpuFanRpm ?? null)
-  const cpuFanTarget  = liveControls?.currentCpuFanSpeedPercent ?? null
-  const gpuFanTarget  = liveControls?.currentGpuFanSpeedPercent ?? null
+  // Derived display values
+  const tel       = hasData(liveTel) ? liveTel : null
+  const curCpuT   = tel ? (tel.cpuTempAverageC ?? tel.cpuTempC ?? null) : null
+  const curGpuT   = tel?.gpuTempC ?? null
+  const curCpuU   = tel?.cpuUsagePercent ?? null
+  const curGpuU   = tel?.gpuUsagePercent ?? null
+  const cpuFanRpm = (tel?.cpuFanRpm ?? 0) > 0 ? tel!.cpuFanRpm : null
+  const gpuFanRpm = (tel?.gpuFanRpm ?? 0) > 0 ? tel!.gpuFanRpm : null
 
-  // RPM to display in dial (live > simulated)
-  const cpuRpm = displayCpuRpm ?? (fanProfile === 'max' ? 4950 : fanProfile === 'auto' ? 2173 : Math.round(cpuSlider * 48))
-  const gpuRpm = displayGpuRpm ?? (fanProfile === 'max' ? 5110 : fanProfile === 'auto' ? 2542 : Math.round(gpuSlider * 52))
-  const dialFast    = fanProfile === 'max' || coolBoost
-  const dialActive  = fanProfile !== 'auto' || (displayCpuRpm ?? 0) > 500
+  // Fan RPM for display (live preferred, else simulated)
+  const cpuRpm = cpuFanRpm ?? (fanProfile === 'max' ? 4950 : fanProfile === 'auto' ? 2173 : Math.round(cpuSlider * 48 + 200))
+  const gpuRpm = gpuFanRpm ?? (fanProfile === 'max' ? 5110 : fanProfile === 'auto' ? 2542 : Math.round(gpuSlider * 52 + 220))
+  const dialFast   = fanProfile === 'max' || coolBoost
+  const dialActive = fanProfile !== 'auto' || (cpuFanRpm ?? 0) > 500
 
-  // ── Update monitoring history from live telemetry ─────────────────────────
+  // ── Update monitoring history ─────────────────────────────────────────────
   useEffect(() => {
     if (!tel) return
     const ct = tel.cpuTempAverageC ?? tel.cpuTempC ?? 0
     const gt = tel.gpuTempC ?? 0
     const cl = tel.cpuUsagePercent ?? 0
     const gl = tel.gpuUsagePercent ?? 0
-
-    setCpuTempH(h => [...h, ct].slice(-GRAPH_LEN))
-    setCpuLoadH(h => [...h, cl].slice(-GRAPH_LEN))
-    setGpuTempH(h => [...h, gt].slice(-GRAPH_LEN))
-    setGpuLoadH(h => [...h, gl].slice(-GRAPH_LEN))
+    setCpuTH(h => [...h, ct].slice(-GLEN))
+    setCpuLH(h => [...h, cl].slice(-GLEN))
+    setGpuTH(h => [...h, gt].slice(-GLEN))
+    setGpuLH(h => [...h, gl].slice(-GLEN))
     setCpuMin(p => p === 0 ? Math.round(ct) : Math.min(p, Math.round(ct)))
     setCpuMax(p => Math.max(p, Math.round(ct)))
     setGpuMin(p => p === 0 ? Math.round(gt) : Math.min(p, Math.round(gt)))
     setGpuMax(p => Math.max(p, Math.round(gt)))
   }, [tel])
 
-  // ── Serialized state helper ───────────────────────────────────────────────
-  function updateSerial<T>(ref: { current: string | null }, val: T | null, set: (v: T | null) => void) {
+  // ── Serialized update helper ──────────────────────────────────────────────
+  function serial<T>(ref: { current: string|null }, val: T|null, set: (v: T|null)=>void) {
     const s = val == null ? null : JSON.stringify(val)
     if (ref.current === s) return
     ref.current = s; set(val)
   }
 
-  // ── Apply control snapshot from backend ──────────────────────────────────
-  function applySnap(controls: ControlSnapshot, live?: LiveControlSnapshot | null) {
-    setFanProfile(controls.activeFanProfile)
-    setPowerProfile(controls.activePowerProfile)
-    setCustomCurves(fromBackendCurves(controls.fanCurves))
-    curvesRef.current = fromBackendCurves(controls.fanCurves)
-    setCustomPowerBase(controls.customPowerBase)
-    setCustomProcessorState({ min: controls.customProcessorState.minPercent, max: controls.customProcessorState.maxPercent })
-    setGpuTuning(controls.gpuTuning)
-    setFanSyncLock(controls.fanSyncLockEnabled)
-    setSmartCharging(controls.personalSettings.smartChargingEnabled)
-    setProcessorCtrl(controls.personalSettings.processorStateControlEnabled)
-    setNvidiaTelemetry(controls.personalSettings.nvidiaTelemetryEnabled ?? true)
-    setKeepWarmed(controls.personalSettings.keepUiPrewarmed ?? false)
-    setUsbPower(controls.personalSettings.usbPowerEnabled)
-    setBlueLightFilter(controls.personalSettings.blueLightFilterEnabled)
-    setAutoRefreshBattery(controls.personalSettings.autoRefreshRateOnBatteryEnabled)
-    setAutoRefreshHz(controls.personalSettings.autoRefreshRateRestoreHz)
-    setBootArt(controls.personalSettings.selectedBootArt)
-    setBootFile(controls.personalSettings.customBootFilename)
-    setUpdateOnLaunch(controls.personalSettings.checkForUpdatesOnLaunch)
-    setActiveOcSlot(controls.activeOcSlot)
-    setOcApplyState(controls.ocApplyState)
-    setOcLocked(controls.ocTuningLocked)
-    if (live !== undefined) {
-      liveObjRef.current = live
-      setLiveControls(live)
+  // ── Apply control snapshot from backend ───────────────────────────────────
+  function applySnap(c: ControlSnapshot, live?: LiveControlSnapshot|null) {
+    setFanProfile(c.activeFanProfile)
+    setPowerProfile(c.activePowerProfile)
+    const cv = fromCurves(c.fanCurves)
+    setCurves(cv); curvesR.current = cv
+    setCustPBase(c.customPowerBase)
+    setCustPState({ min: c.customProcessorState.minPercent, max: c.customProcessorState.maxPercent })
+    setGpuTuning(c.gpuTuning)
+    setFanSync(c.fanSyncLockEnabled)
+    setSmartChg(c.personalSettings.smartChargingEnabled)
+    setPCtrl(c.personalSettings.processorStateControlEnabled)
+    setNvTel(c.personalSettings.nvidiaTelemetryEnabled ?? true)
+    setKeepWarm(c.personalSettings.keepUiPrewarmed ?? false)
+    setUsbPwr(c.personalSettings.usbPowerEnabled)
+    setBlFilter(c.personalSettings.blueLightFilterEnabled)
+    setArBat(c.personalSettings.autoRefreshRateOnBatteryEnabled)
+    setArHz(c.personalSettings.autoRefreshRateRestoreHz)
+    setBootArt(c.personalSettings.selectedBootArt)
+    setBootFile(c.personalSettings.customBootFilename)
+    setUpdOnLaunch(c.personalSettings.checkForUpdatesOnLaunch)
+    setOcSlot(c.activeOcSlot)
+    setOcState(c.ocApplyState)
+    setOcLocked(c.ocTuningLocked)
+    if (live !== undefined) { liveObj.current = live; setLiveCtrl(live) }
+  }
+
+  // ── Build persist payload ─────────────────────────────────────────────────
+  function buildPayload(overrides: { activeFanProfile?: FanProfile; activePowerProfile?: PowerProfile } = {}): ControlSnapshot {
+    return {
+      activePowerProfile:   overrides.activePowerProfile ?? powerProfile,
+      activeFanProfile:     overrides.activeFanProfile   ?? fanProfile,
+      customProcessorState: { minPercent: custPState.min, maxPercent: custPState.max },
+      customPowerBase: custPBase,
+      gpuTuning,
+      ocPresets: [],
+      activeOcSlot: ocSlot,
+      ocApplyState: ocState,
+      ocTuningLocked: ocLocked,
+      fanCurves: toCurves(curvesR.current),
+      fanSyncLockEnabled: fanSync,
+      personalSettings: {
+        smartChargingEnabled: smartChg,
+        usbPowerEnabled: usbPwr,
+        processorStateControlEnabled: pCtrl,
+        nvidiaTelemetryEnabled: nvTel,
+        keepUiPrewarmed: keepWarm,
+        blueLightFilterEnabled: blFilter,
+        autoRefreshRateOnBatteryEnabled: arBat,
+        autoRefreshRateRestoreHz: arHz,
+        selectedBootArt: bootArt as BootArtId,
+        customBootFilename: bootFile,
+        updateChannel: updateCh,
+        checkForUpdatesOnLaunch: updOnLaunch,
+      },
     }
   }
 
-  // ── Persist (save) controls to backend ───────────────────────────────────
-  async function persist(overrides: Partial<{
-    activeFanProfile: FanProfileId
-    activePowerProfile: PowerProfileId
-  }> = {}) {
-    try {
-      await saveControlSnapshot({
-        activePowerProfile:   overrides.activePowerProfile ?? powerProfile,
-        activeFanProfile:     overrides.activeFanProfile   ?? fanProfile,
-        customProcessorState: { minPercent: customProcessorState.min, maxPercent: customProcessorState.max },
-        customPowerBase,
-        gpuTuning,
-        ocPresets: [],
-        activeOcSlot,
-        ocApplyState,
-        ocTuningLocked: ocLocked,
-        fanCurves:      toBackendCurves(curvesRef.current),
-        fanSyncLockEnabled: fanSyncLock,
-        personalSettings: {
-          smartChargingEnabled:              smartCharging,
-          usbPowerEnabled:                   usbPower,
-          processorStateControlEnabled:      processorCtrl,
-          nvidiaTelemetryEnabled:            nvidiaTelemetry,
-          keepUiPrewarmed:                   keepWarmed,
-          blueLightFilterEnabled:            blueLightFilter,
-          autoRefreshRateOnBatteryEnabled:   autoRefreshBattery,
-          autoRefreshRateRestoreHz:          autoRefreshHz,
-          selectedBootArt:                   bootArt as BootArtId,
-          customBootFilename:                bootFile,
-          updateChannel:                     updateCh,
-          checkForUpdatesOnLaunch:           updateOnLaunch,
-        },
-      })
-    } catch { /* non-fatal */ }
-  }
+  // Persist saves settings to disk → remembered across restarts
+  const persist = useCallback(async (overrides: { activeFanProfile?: FanProfile; activePowerProfile?: PowerProfile } = {}) => {
+    try { await saveControlSnapshot(buildPayload(overrides)) } catch { /* non-fatal */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [powerProfile, fanProfile, custPState, custPBase, gpuTuning, ocSlot, ocState, ocLocked, fanSync, smartChg, usbPwr, pCtrl, nvTel, keepWarm, blFilter, arBat, arHz, bootArt, bootFile, updateCh, updOnLaunch])
 
   // ── Bootstrap + polling ───────────────────────────────────────────────────
   useEffect(() => {
-    const isTauri = isDesktopRuntime()
     let cancelled = false
 
-    if (isTauri) {
-      // Bootstrap
+    if (isTauri()) {
+      // Load saved settings on startup
       void (async () => {
         try {
           const bs = await getBackendBootstrap()
           if (cancelled) return
-          setCapabilities(bs.capabilities)
-          setServiceConnected(bs.service.connected)
           svcRef.current = bs.service.connected
           applySnap(bs.controls, bs.liveControls)
-          if (bs.telemetry) updateSerial(telRef, bs.telemetry, setLiveTelemetry)
-        } catch (e) { console.error('Bootstrap failed:', describeError(e)) }
+          if (bs.telemetry) serial(telSnap, bs.telemetry, setLiveTel)
+          setStatusMsg(bs.service.connected ? 'Service connected.' : 'Service not connected.')
+        } catch (e) { setStatusMsg(`Init failed: ${errMsg(e)}`) }
       })()
 
-      // Poll
-      let pollTimer = 0
+      // Poll live data
+      let t = 0
       async function poll() {
-        if (pollRef.current || ctrlCount.current > 0) return
-        pollRef.current = true
+        if (polling.current || ctlN.current > 0) return
+        polling.current = true
         try {
           const snap = await getBackendPollSnapshot()
           if (cancelled) return
-          setServiceConnected(snap.service.connected)
           svcRef.current = snap.service.connected
-          updateSerial(telRef, snap.telemetry, setLiveTelemetry)
-          updateSerial(liveRef, snap.liveControls, (v) => {
-            liveObjRef.current = v
-            setLiveControls(v)
-          })
-        } catch { /* ignore */ } finally { pollRef.current = false }
+          serial(telSnap, snap.telemetry, setLiveTel)
+          serial(liveSnap, snap.liveControls, v => { liveObj.current = v; setLiveCtrl(v) })
+        } catch { } finally { polling.current = false }
       }
 
-      const schedPoll = () => {
-        pollTimer = window.setTimeout(() => {
-          void poll().finally(() => { if (!cancelled) schedPoll() })
-        }, document.visibilityState === 'hidden' ? HIDDEN_POLL_MS : POLL_MS)
+      const sched = () => {
+        t = window.setTimeout(() => void poll().finally(() => { if (!cancelled) sched() }),
+          document.visibilityState === 'hidden' ? HIDPOLL : POLL_MS)
       }
-
-      const onVis = () => { if (document.visibilityState === 'visible') { clearTimeout(pollTimer); void poll().finally(() => { if (!cancelled) schedPoll() }) } }
+      const onVis = () => { if (document.visibilityState === 'visible') { clearTimeout(t); void poll().finally(() => { if (!cancelled) sched() }) } }
       document.addEventListener('visibilitychange', onVis)
-      schedPoll()
+      sched()
+      return () => { cancelled = true; clearTimeout(t); document.removeEventListener('visibilitychange', onVis) }
 
-      return () => { cancelled = true; clearTimeout(pollTimer); document.removeEventListener('visibilitychange', onVis) }
     } else {
-      // ── Browser preview: animated simulation ──────────────────────────────
-      let frame = 0
-      const baseC = 47, baseG = 45
-
-      // pre-fill initial history
-      const iCT = Array.from({ length: GRAPH_LEN }, (_, i) => baseC + Math.sin(i * 0.15) * 9 + Math.random() * 5)
-      const iCL = Array.from({ length: GRAPH_LEN }, (_, i) => 36 + Math.sin(i * 0.12) * 25 + Math.random() * 10)
-      const iGT = Array.from({ length: GRAPH_LEN }, (_, i) => baseG + Math.sin(i * 0.10) * 7 + Math.random() * 4)
-      const iGL = Array.from({ length: GRAPH_LEN }, (_, i) => 22 + Math.sin(i * 0.09) * 18 + Math.random() * 8)
-      setCpuTempH(iCT); setCpuLoadH(iCL); setGpuTempH(iGT); setGpuLoadH(iGL)
+      // ── Browser preview simulation ──────────────────────────────────────
+      let f = 0
+      const bc = 47, bg = 45
+      const initCT = Array.from({ length: GLEN }, (_, i) => bc + Math.sin(i * 0.15) * 10 + Math.random() * 5)
+      const initCL = Array.from({ length: GLEN }, (_, i) => 40 + Math.sin(i * 0.11) * 28 + Math.random() * 12)
+      const initGT = Array.from({ length: GLEN }, (_, i) => bg + Math.sin(i * 0.10) * 8 + Math.random() * 4)
+      const initGL = Array.from({ length: GLEN }, (_, i) => 22 + Math.sin(i * 0.09) * 20 + Math.random() * 8)
+      setCpuTH(initCT); setCpuLH(initCL); setGpuTH(initGT); setGpuLH(initGL)
       setCpuMin(36); setCpuMax(91); setGpuMin(35); setGpuMax(74)
+      setStatusMsg('Preview mode — service not connected.')
 
       const tid = window.setInterval(() => {
-        frame++
-        const ct = baseC + Math.sin(frame * 0.08) * 10 + Math.random() * 6
-        const gt = baseG + Math.sin(frame * 0.06) * 8 + Math.random() * 5
-        const cl = 38 + Math.sin(frame * 0.10) * 28 + Math.random() * 12
-        const gl = 24 + Math.sin(frame * 0.07) * 22 + Math.random() * 10
-        const cr = 2173 + Math.round(Math.sin(frame * 0.05) * 200 + Math.random() * 60)
-        const gr = 2542 + Math.round(Math.sin(frame * 0.04) * 250 + Math.random() * 80)
-
-        setCpuTempH(h => [...h, ct].slice(-GRAPH_LEN))
-        setCpuLoadH(h => [...h, cl].slice(-GRAPH_LEN))
-        setGpuTempH(h => [...h, gt].slice(-GRAPH_LEN))
-        setGpuLoadH(h => [...h, gl].slice(-GRAPH_LEN))
+        f++
+        const ct = bc + Math.sin(f * 0.08) * 11 + Math.random() * 6
+        const gt = bg + Math.sin(f * 0.06) * 9 + Math.random() * 5
+        const cl = 40 + Math.sin(f * 0.10) * 30 + Math.random() * 14
+        const gl = 24 + Math.sin(f * 0.07) * 22 + Math.random() * 10
+        const cr = 2173 + Math.round(Math.sin(f * 0.05) * 200 + Math.random() * 80)
+        const gr = 2542 + Math.round(Math.sin(f * 0.04) * 260 + Math.random() * 90)
+        setCpuTH(h => [...h, ct].slice(-GLEN))
+        setCpuLH(h => [...h, cl].slice(-GLEN))
+        setGpuTH(h => [...h, gt].slice(-GLEN))
+        setGpuLH(h => [...h, gl].slice(-GLEN))
         setCpuMin(p => p === 0 ? Math.round(ct) : Math.min(p, Math.round(ct)))
         setCpuMax(p => Math.max(p, Math.round(ct)))
         setGpuMin(p => p === 0 ? Math.round(gt) : Math.min(p, Math.round(gt)))
         setGpuMax(p => Math.max(p, Math.round(gt)))
-
-        setLiveTelemetry({
+        setLiveTel({
           cpuTempC: Math.round(ct), cpuTempAverageC: Math.round(ct),
-          cpuTempLowestCoreC: Math.round(ct - 3), cpuTempHighestCoreC: Math.round(ct + 5),
-          gpuTempC: Math.round(gt), systemTempC: Math.round((ct + gt) / 2),
+          cpuTempLowestCoreC: Math.round(ct-3), cpuTempHighestCoreC: Math.round(ct+5),
+          gpuTempC: Math.round(gt), systemTempC: Math.round((ct+gt)/2),
           cpuUsagePercent: Math.round(cl), gpuUsagePercent: Math.round(gl),
           gpuMemoryUsagePercent: 38, gpuPowerDrawW: 65, gpuPowerLimitW: 80,
           gpuPowerDefaultLimitW: 80, gpuPowerMinLimitW: 20, gpuPowerMaxLimitW: 100,
           cpuPackagePowerW: 45, cpuPl1W: 45, cpuPl1Enabled: true, cpuPl2W: 65, cpuPl2Enabled: true,
           cpuPowerLimitLocked: false, cpuName: 'Core i7-12700H', cpuBrand: 'Intel',
           gpuName: 'RTX 3060 Laptop', gpuBrand: 'NVIDIA', systemVendor: 'Acer', systemModel: 'Nitro AN515-58',
-          cpuClockMhz: 3200 + Math.round(Math.random() * 800), gpuClockMhz: 1500 + Math.round(Math.random() * 400),
-          cpuFanRpm: cr, gpuFanRpm: gr, batteryPercent: 72, batteryLifeRemainingSec: null, acPluggedIn: true,
+          cpuClockMhz: 3200 + Math.round(Math.random()*800), gpuClockMhz: 1500 + Math.round(Math.random()*400),
+          cpuFanRpm: cr, gpuFanRpm: gr,
+          batteryPercent: 72, batteryLifeRemainingSec: null, acPluggedIn: true,
         })
       }, 1000)
 
@@ -635,332 +567,330 @@ export default function NitroApp() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ── Fan profile handler — actually calls Tauri ────────────────────────────
-  async function handleFanProfile(id: FanProfileId) {
+  // ── Save settings when app is closed / refreshed ─────────────────────────
+  // This ensures "max mode" or any setting chosen before closing is remembered
+  useEffect(() => {
+    const save = () => { void persist() }
+    window.addEventListener('beforeunload', save)
+    return () => window.removeEventListener('beforeunload', save)
+  }, [persist])
+
+  // ── Fan profile apply ─────────────────────────────────────────────────────
+  async function handleFan(id: FanProfile, overrideMsg?: string) {
     setFanProfile(id)
-    setStatusMsg(`Applying fan mode: ${id}…`)
+    setStatusMsg(overrideMsg ?? `Applying fan mode: ${id}…`)
+
+    // Always persist to disk first (works offline too)
+    await persist({ activeFanProfile: id })
 
     if (!svcRef.current) {
-      await persist({ activeFanProfile: id })
       setStatusMsg(`Fan mode ${id} saved (service not connected).`)
       return
     }
-
-    if (fanApplyRef.current) { qFanRef.current = id; return }
-    fanApplyRef.current = true
-    ctrlCount.current++
+    if (fanRef.current) { qFan.current = id; return }
+    fanRef.current = true; ctlN.current++
     try {
       await waitPaint()
       const req = id === 'custom'
-        ? applyCustomFanCurves(toBackendCurves(curvesRef.current))
+        ? applyCustomFanCurves(toCurves(curvesR.current))
         : applyFanProfile(id)
-      const result = await withTimeout(req, FAN_TIMEOUT_MS, `fan ${id}`)
-      applySnap(result.controls)
-      setStatusMsg(result.detail)
+      const res = await withTo(req, FAN_TO, `fan ${id}`)
+      applySnap(res.controls)
+      setStatusMsg(res.detail)
     } catch (e) {
       setFanProfile(fanProfile)
-      setStatusMsg(`Fan apply failed: ${describeError(e)}`)
+      setStatusMsg(`Fan apply failed: ${errMsg(e)}`)
     } finally {
-      fanApplyRef.current = false
-      ctrlCount.current = Math.max(0, ctrlCount.current - 1)
-      const q = qFanRef.current; qFanRef.current = null
-      if (q && q !== id) void handleFanProfile(q)
+      fanRef.current = false
+      ctlN.current = Math.max(0, ctlN.current - 1)
+      const q = qFan.current; qFan.current = null
+      if (q && q !== id) void handleFan(q)
     }
   }
 
-  // ── Power profile handler — actually calls Tauri ──────────────────────────
-  async function handlePowerProfile(id: PowerProfileId) {
+  // ── Power profile apply ───────────────────────────────────────────────────
+  async function handlePower(id: PowerProfile) {
     setPowerProfile(id)
-    setStatusMsg(`Applying power plan: ${id}…`)
+    const ps = id === 'battery-guard' ? { minPercent:5,  maxPercent:45  }
+             : id === 'balanced'      ? { minPercent:35, maxPercent:88  }
+             : id === 'performance'   ? { minPercent:100,maxPercent:100 }
+             : id === 'turbo'         ? { minPercent:100,maxPercent:100 }
+             : { minPercent:custPState.min, maxPercent:custPState.max }
 
-    const procState = id === 'battery-guard' ? { minPercent: 5, maxPercent: 45 }
-      : id === 'balanced'    ? { minPercent: 35, maxPercent: 88 }
-      : id === 'performance' ? { minPercent: 100, maxPercent: 100 }
-      : id === 'turbo'       ? { minPercent: 100, maxPercent: 100 }
-      : { minPercent: customProcessorState.min, maxPercent: customProcessorState.max }
+    await persist({ activePowerProfile: id })
 
     if (!svcRef.current) {
-      await persist({ activePowerProfile: id })
       setStatusMsg(`Power plan ${id} saved (service not connected).`)
       return
     }
-
-    if (pwrApplyRef.current) { qPwrRef.current = id; return }
-    pwrApplyRef.current = true
-    ctrlCount.current++
+    if (pwrRef.current) { qPwr.current = id; return }
+    pwrRef.current = true; ctlN.current++
     try {
       await waitPaint()
-      const result = await applyPowerProfile(id, procState, null, processorCtrl)
-      applySnap(result)
+      const res = await applyPowerProfile(id, ps, null, pCtrl)
+      applySnap(res)
       setStatusMsg(`Power plan applied: ${id}`)
     } catch (e) {
       setPowerProfile(powerProfile)
-      setStatusMsg(`Power apply failed: ${describeError(e)}`)
+      setStatusMsg(`Power apply failed: ${errMsg(e)}`)
     } finally {
-      pwrApplyRef.current = false
-      ctrlCount.current = Math.max(0, ctrlCount.current - 1)
-      const q = qPwrRef.current; qPwrRef.current = null
-      if (q && q !== id) void handlePowerProfile(q)
+      pwrRef.current = false
+      ctlN.current = Math.max(0, ctlN.current - 1)
+      const q = qPwr.current; qPwr.current = null
+      if (q && q !== id) void handlePower(q)
     }
   }
 
-  // ── CoolBoost: maps to 'max' fan profile ─────────────────────────────────
-  async function handleCoolBoost(enabled: boolean) {
-    setCoolBoost(enabled)
-    await handleFanProfile(enabled ? 'max' : 'auto')
+  // CoolBoost
+  async function handleCoolBoost(on: boolean) {
+    setCoolBoost(on)
+    await handleFan(on ? 'max' : 'auto')
   }
 
-  // ── Window controls ───────────────────────────────────────────────────────
-  async function handleMinimize() { if (isDesktopRuntime()) await getCurrentWindow().minimize() }
-  async function handleClose()    { if (isDesktopRuntime()) await getCurrentWindow().close() }
+  // Window controls
+  const doMinimize = async () => {
+    try {
+      await getCurrentWindow().minimize()
+    } catch (error) {
+      // The browser preview has no native window. In the packaged Tauri app the
+      // API is available even when the legacy __TAURI_INTERNALS__ global is not.
+      if (isTauri()) setStatusMsg(`Could not minimize: ${errMsg(error)}`)
+    }
+  }
+
+  const doClose = async () => {
+    try {
+      await persist()
+      await getCurrentWindow().close()
+    } catch (error) {
+      if (isTauri()) setStatusMsg(`Could not close: ${errMsg(error)}`)
+    }
+  }
 
   // ── Render ────────────────────────────────────────────────────────────────
-  const fanSpinClass = dialFast ? 'fast' : ''
+  const spinDur = dialFast ? '1.0s' : '3.5s'
+  const isCustom = fanProfile === 'custom'
 
   return (
-    <div className="ns-shell">
+    <div className="nc-shell">
 
-      {/* ── TITLE BAR ──────────────────────────────────────────────────────── */}
-      <header className="ns-titlebar">
-        {/* Acer wordmark */}
-        <span className="ns-titlebar__acer">acer</span>
+      {/* ── TITLEBAR ──────────────────────────────────────────────────────── */}
+      <header className="nc-titlebar">
+        <span className="nc-titlebar__acer">acer</span>
 
-        {/* NITROSENSE centered */}
-        <div className="ns-titlebar__center">
-          <span className="ns-titlebar__wordmark">
-            <span className="ns-titlebar__wordmark-nitro">NITRO</span>SENSE
-          </span>
+        <div className="nc-titlebar__title">
+          <span className="nc-titlebar__bold">NITRO</span>
+          <span className="nc-titlebar__light">COOLER</span>
         </div>
 
-        {/* Right icons */}
-        <div className="ns-titlebar__right">
-          {/* GeForce Experience placeholder */}
-          <div className="ns-titlebar__gfe">
-            <svg className="ns-titlebar__gfe-logo" viewBox="0 0 28 28" fill="none">
-              <rect width="28" height="28" rx="3" fill="#76b900" />
-              <text x="14" y="20" textAnchor="middle" fill="white" fontSize="13" fontWeight="bold">G</text>
-            </svg>
-            <span style={{ lineHeight: 1.1 }}>GEFORCE<br />EXPERIENCE</span>
+        <div className="nc-titlebar__right">
+          {/* GeForce Experience */}
+          <div className="nc-gfe">
+            <div className="nc-gfe__dot">G</div>
+            <span className="nc-gfe__txt">GEFORCE<br/>EXPERIENCE</span>
           </div>
-
-          {/* Keyboard icon */}
-          <button className="ns-titlebar__icon-btn" title="Keyboard">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <rect x="2" y="6" width="20" height="12" rx="2" />
-              <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8" strokeLinecap="round" />
+          {/* Keyboard */}
+          <button className="nc-ibtn" title="Keyboard">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+              <rect x="2" y="7" width="20" height="11" rx="2"/>
+              <line x1="6" y1="11" x2="6" y2="11" strokeWidth="2.5" strokeLinecap="round"/>
+              <line x1="10" y1="11" x2="10" y2="11" strokeWidth="2.5" strokeLinecap="round"/>
+              <line x1="14" y1="11" x2="14" y2="11" strokeWidth="2.5" strokeLinecap="round"/>
+              <line x1="18" y1="11" x2="18" y2="11" strokeWidth="2.5" strokeLinecap="round"/>
+              <line x1="8" y1="15" x2="16" y2="15" strokeWidth="2" strokeLinecap="round"/>
             </svg>
           </button>
-
-          {/* Sound wave icon */}
-          <button className="ns-titlebar__icon-btn" title="Audio">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d="M2 10v4M6 7v10M10 4v16M14 7v10M18 10v4" strokeLinecap="round" />
+          {/* Audio */}
+          <button className="nc-ibtn" title="Audio">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+              <line x1="2"  y1="10" x2="2"  y2="14" strokeLinecap="round"/>
+              <line x1="5"  y1="7"  x2="5"  y2="17" strokeLinecap="round"/>
+              <line x1="8"  y1="4"  x2="8"  y2="20" strokeLinecap="round"/>
+              <line x1="11" y1="8"  x2="11" y2="16" strokeLinecap="round"/>
+              <line x1="14" y1="5"  x2="14" y2="19" strokeLinecap="round"/>
+              <line x1="17" y1="9"  x2="17" y2="15" strokeLinecap="round"/>
+              <line x1="20" y1="11" x2="20" y2="13" strokeLinecap="round"/>
             </svg>
           </button>
-
-          {/* Settings gear */}
-          <button className="ns-titlebar__icon-btn" title="Settings">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" strokeLinecap="round" />
+          {/* Settings */}
+          <button className="nc-ibtn" title="Settings">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
+              <circle cx="12" cy="12" r="3"/>
+              <path strokeLinecap="round" d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
             </svg>
           </button>
-
           {/* Minimize */}
-          <button className="ns-titlebar__icon-btn" title="Minimize" onClick={handleMinimize}>
-            <svg width="14" height="2" viewBox="0 0 14 2"><rect width="14" height="2" fill="currentColor" /></svg>
+          <button className="nc-ibtn" title="Minimize" onClick={doMinimize}>
+            <svg width="14" height="2" viewBox="0 0 14 2"><rect width="14" height="2" fill="currentColor"/></svg>
           </button>
-
           {/* Close */}
-          <button className="ns-titlebar__icon-btn ns-close" title="Close" onClick={handleClose}>
+          <button className="nc-ibtn close" title="Close" onClick={doClose}>
             <svg width="12" height="12" viewBox="0 0 12 12">
-              <path fill="currentColor" d="M6 4.586L1.707.293.293 1.707 4.586 6 .293 10.293l1.414 1.414L6 7.414l4.293 4.293 1.414-1.414L7.414 6l4.293-4.293L10.293.293 6 4.586z" />
+              <path fill="currentColor" d="M6 4.586L1.707.293.293 1.707 4.586 6 .293 10.293l1.414 1.414L6 7.414l4.293 4.293 1.414-1.414L7.414 6l4.293-4.293L10.293.293z"/>
             </svg>
           </button>
         </div>
       </header>
 
-      {/* ── BODY ───────────────────────────────────────────────────────────── */}
-      <div className="ns-body">
+      {/* ── BODY ──────────────────────────────────────────────────────────── */}
+      <div className="nc-body">
 
-        {/* ── FAN CONTROL PANEL ──────────────────────────────────────────────*/}
-        <div className="ns-fan-panel">
-          <span className="ns-fan-panel__tab">Fan Control</span>
+        {/* ── FAN CONTROL PANEL ───────────────────────────────────────────── */}
+        <div className={`nc-fan${isCustom ? ' expanded' : ''}`}>
+          <span className="nc-tab">Fan Control</span>
 
-          {/* CoolBoost row top-right */}
-          <div className="ns-coolboost-row">
-            <span className="ns-coolboost-info" title="CoolBoost increases fan speed above the default maximum">ℹ</span>
-            <span className="ns-coolboost-label">CoolBoost™</span>
-            <label className="ns-toggle">
-              <input
-                type="checkbox"
-                checked={coolBoost}
-                onChange={e => void handleCoolBoost(e.target.checked)}
-              />
-              <span className="ns-toggle__track" />
+          {/* CoolBoost toggle */}
+          <div className="nc-cb">
+            <span className="nc-cb__info">ℹ</span>
+            <span className="nc-cb__label">CoolBoost™</span>
+            <label className="nc-toggle">
+              <input type="checkbox" checked={coolBoost} onChange={e => void handleCoolBoost(e.target.checked)} />
+              <span className="nc-toggle__t" />
             </label>
           </div>
 
-          <div className="ns-fan-panel__inner">
-            {/* Mode list */}
-            <div className="ns-fan-modes">
-              {([
-                { id: 'auto',   label: 'Auto'   },
-                { id: 'max',    label: 'Max'    },
-                { id: 'custom', label: 'Custom' },
-              ] as { id: FanProfileId; label: string }[]).map(m => (
-                <button
-                  key={m.id}
-                  className={`ns-fan-mode-btn${fanProfile === m.id ? ' is-active' : ''}`}
-                  onClick={() => void handleFanProfile(m.id)}
-                >
-                  <FanModeIcon active={fanProfile === m.id} />
-                  {m.label}
-                </button>
-              ))}
+          {/* Fan mode buttons */}
+          <div className="nc-modes">
+            {([
+              { id: 'auto',   label: 'Auto'   },
+              { id: 'max',    label: 'Max'    },
+              { id: 'custom', label: 'Custom' },
+            ] as { id: FanProfile; label: string }[]).map(m => (
+              <button
+                key={m.id}
+                className={`nc-mbtn${fanProfile === m.id ? ' on' : ''}`}
+                onClick={() => void handleFan(m.id)}
+              >
+                <FanIcon on={fanProfile === m.id} />
+                {m.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Vertical divider */}
+          <div className="nc-vdiv" />
+
+          {/* Fan dials */}
+          <div className="nc-dials">
+            {/* CPU */}
+            <div className="nc-dgrp">
+              <span className="nc-dlabel left">CPU</span>
+              <div className="nc-dial">
+                <div className={`nc-spin${dialFast ? ' fast' : ''}`} style={{ animationDuration: spinDur }}>
+                  <FanRing active={dialActive} size={138} />
+                </div>
+                <div className="nc-readout">
+                  <span className="nc-rpm">{cpuRpm.toLocaleString()}</span>
+                  <span className="nc-runit">RPM</span>
+                </div>
+              </div>
             </div>
 
-            {/* Dials */}
-            <div className="ns-fan-dials-area">
-              {/* CPU */}
-              <div className="ns-dial-block">
-                <span className="ns-dial-label left">CPU</span>
-                <div className="ns-dial">
-                  <div
-                    className={`ns-dial__svg ${fanSpinClass}`}
-                    style={{ animation: `ns-spin ${dialFast ? '1.2s' : '3.5s'} linear infinite` }}
-                  >
-                    <FanRingSVG active={dialActive} fast={dialFast} />
-                  </div>
-                  <div className="ns-dial__readout">
-                    <span className="ns-dial__rpm-val">{cpuRpm.toLocaleString()}</span>
-                    <span className="ns-dial__rpm-unit">RPM</span>
-                  </div>
+            <div className="nc-dsep" />
+
+            {/* GPU */}
+            <div className="nc-dgrp">
+              <div className="nc-dial">
+                <div className={`nc-spin${dialFast ? ' fast' : ''}`} style={{ animationDuration: spinDur }}>
+                  <FanRing active={dialActive} size={138} />
+                </div>
+                <div className="nc-readout">
+                  <span className="nc-rpm">{gpuRpm.toLocaleString()}</span>
+                  <span className="nc-runit">RPM</span>
                 </div>
               </div>
-
-              <div className="ns-dial-sep" />
-
-              {/* GPU */}
-              <div className="ns-dial-block">
-                <div className="ns-dial">
-                  <div
-                    className={`ns-dial__svg ${fanSpinClass}`}
-                    style={{ animation: `ns-spin ${dialFast ? '1.2s' : '3.5s'} linear infinite` }}
-                  >
-                    <FanRingSVG active={dialActive} fast={dialFast} />
-                  </div>
-                  <div className="ns-dial__readout">
-                    <span className="ns-dial__rpm-val">{gpuRpm.toLocaleString()}</span>
-                    <span className="ns-dial__rpm-unit">RPM</span>
-                  </div>
-                </div>
-                <span className="ns-dial-label right">GPU</span>
-              </div>
+              <span className="nc-dlabel right">GPU</span>
             </div>
           </div>
 
-          {/* Custom sliders */}
-          {fanProfile === 'custom' && (
-            <div className="ns-custom-sliders">
-              <div className="ns-custom-row">
-                <span>CPU</span>
-                <input
-                  type="range" min={0} max={100} value={cpuSlider}
-                  className="ns-slider"
-                  onChange={e => setCpuSlider(Number(e.target.value))}
-                />
-                <button className="ns-auto-lbl" onClick={() => void handleFanProfile('auto')}>Auto</button>
+          {/* ── Custom fan sliders (appear when Custom is selected) ── */}
+          {isCustom && (
+            <div className="nc-custom">
+              {/* CPU slider row */}
+              <div className="nc-crow">
+                <span className="nc-cname">CPU</span>
+                <button className="nc-pm"
+                  onClick={() => setCpuSlider(v => Math.max(0, v - 5))}>−</button>
+                <input type="range" min={0} max={100} value={cpuSlider}
+                  className="nc-slider"
+                  onChange={e => setCpuSlider(+e.target.value)} />
+                <button className="nc-pm"
+                  onClick={() => setCpuSlider(v => Math.min(100, v + 5))}>+</button>
+                <span className="nc-pct">{cpuSlider}%</span>
+                <button className="nc-autobtn" onClick={() => void handleFan('auto')}>Auto</button>
               </div>
-              <div className="ns-custom-row">
-                <span>GPU</span>
-                <input
-                  type="range" min={0} max={100} value={gpuSlider}
-                  className="ns-slider"
-                  onChange={e => setGpuSlider(Number(e.target.value))}
-                />
-                <button className="ns-auto-lbl" onClick={() => void handleFanProfile('auto')}>Auto</button>
+              {/* GPU slider row */}
+              <div className="nc-crow">
+                <span className="nc-cname">GPU</span>
+                <button className="nc-pm"
+                  onClick={() => setGpuSlider(v => Math.max(0, v - 5))}>−</button>
+                <input type="range" min={0} max={100} value={gpuSlider}
+                  className="nc-slider"
+                  onChange={e => setGpuSlider(+e.target.value)} />
+                <button className="nc-pm"
+                  onClick={() => setGpuSlider(v => Math.min(100, v + 5))}>+</button>
+                <span className="nc-pct">{gpuSlider}%</span>
+                <button className="nc-autobtn" onClick={() => void handleFan('auto')}>Auto</button>
               </div>
             </div>
           )}
-        </div>
+        </div>{/* end fan panel */}
 
-        {/* ── BOTTOM ROW ──────────────────────────────────────────────────── */}
-        <div className="ns-bottom">
+        {/* ── BOTTOM ROW ────────────────────────────────────────────────── */}
+        <div className="nc-bottom">
 
           {/* Power Plan */}
-          <div className="ns-power-panel">
-            <span className="ns-power-panel__tab">Power Plan</span>
-            <div className="ns-power-panel__inner">
-              <div className="ns-mode-label">Mode</div>
-
-              <div className="ns-ac-tabs">
-                <button
-                  className={`ns-ac-tab${acMode === 'ac' ? ' is-active' : ''}`}
-                  onClick={() => setAcMode('ac')}
-                >AC</button>
-                <button
-                  className={`ns-ac-tab${acMode === 'battery' ? ' is-active' : ''}`}
-                  onClick={() => setAcMode('battery')}
-                >Battery</button>
+          <div className="nc-pplan">
+            <span className="nc-tab">Power Plan</span>
+            <div className="nc-pplan__inner">
+              <div className="nc-mlbl">Mode</div>
+              <div className="nc-actabs">
+                <button className={`nc-actab${acMode === 'ac' ? ' on' : ''}`} onClick={() => setAcMode('ac')}>AC</button>
+                <button className={`nc-actab${acMode === 'battery' ? ' on' : ''}`} onClick={() => setAcMode('battery')}>Battery</button>
               </div>
-
-              <div className="ns-power-list">
-                {POWER_PLANS.map(p => (
+              <div className="nc-pitems">
+                {PLANS.map(p => (
                   <button
                     key={p.id}
-                    className={`ns-power-item${powerProfile === p.id ? ' is-active' : ''}`}
-                    onClick={() => void handlePowerProfile(p.id)}
+                    className={`nc-pitem${powerProfile === p.id ? ' on' : ''}`}
+                    onClick={() => void handlePower(p.id)}
                   >
-                    {p.label.split('\n').map((line, i) => (
-                      <span key={i} style={i > 0 ? { display: 'block', fontSize: 11 } : undefined}>
-                        {line}
-                      </span>
+                    {p.label.split('\n').map((ln, i) => (
+                      <span key={i} style={i > 0 ? { display:'block', fontSize:11 } : undefined}>{ln}</span>
                     ))}
                   </button>
                 ))}
               </div>
             </div>
+            {statusMsg && <div className="nc-status">{statusMsg}</div>}
           </div>
 
           {/* Monitoring */}
-          <div className="ns-monitoring">
-            <span className="ns-monitoring__tab">Monitoring</span>
-            <div className="ns-monitoring__inner">
-              <div className="ns-monitoring__header">
-                <span className="ns-monitoring__axis">Temperature (°C) / Loading (%)</span>
+          <div className="nc-mon">
+            <span className="nc-tab">Monitoring</span>
+            <div className="nc-mon__inner">
+              <div className="nc-mon__hdr">
+                <span className="nc-mon__axis">Temperature (°C) / Loading (%)</span>
               </div>
-
               <ChartRow
                 label="CPU"
-                tempHist={cpuTempH}
-                loadHist={cpuLoadH}
-                currentTemp={displayCpuT}
-                currentLoad={displayCpuU}
-                minT={cpuMin}
-                maxT={cpuMax}
+                tempH={cpuTH} loadH={cpuLH}
+                curT={curCpuT != null ? Math.round(curCpuT) : null}
+                curL={curCpuU != null ? Math.round(curCpuU) : null}
+                minT={cpuMin} maxT={cpuMax}
               />
               <ChartRow
                 label="GPU"
-                tempHist={gpuTempH}
-                loadHist={gpuLoadH}
-                currentTemp={displayGpuT}
-                currentLoad={displayGpuU}
-                minT={gpuMin}
-                maxT={gpuMax}
+                tempH={gpuTH} loadH={gpuLH}
+                curT={curGpuT != null ? Math.round(curGpuT) : null}
+                curL={curGpuU != null ? Math.round(curGpuU) : null}
+                minT={gpuMin} maxT={gpuMax}
               />
             </div>
           </div>
 
-        </div>{/* ns-bottom */}
-
-        {/* Status bar (tiny, at very bottom) */}
-        {statusMsg && (
-          <div style={{ fontSize: 10, color: '#555', paddingTop: 2, paddingLeft: 4, flexShrink: 0 }}>
-            {statusMsg}
-          </div>
-        )}
-      </div>{/* ns-body */}
+        </div>{/* end bottom */}
+      </div>{/* end body */}
     </div>
   )
 }
