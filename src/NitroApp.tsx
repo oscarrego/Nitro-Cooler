@@ -151,7 +151,7 @@ function FanRing({ active, size = 138 }: { active: boolean; size?: number }) {
 
       {/* Outer glow rings */}
       {active ? <>
-        <circle cx={cx} cy={cy} r={OR - 2}  fill="none" stroke="rgba(174,22,22,0.84)"  strokeWidth="1.5" filter={`url(#${id})`} />
+        <circle cx={cx} cy={cy} r={OR - 2}  fill="none" stroke="rgba(213,112,28,0.78)"  strokeWidth="1.5" filter={`url(#${id})`} />
         <circle cx={cx} cy={cy} r={OR - 7}  fill="none" stroke="rgba(255,255,255,0.10)"  strokeWidth="1" />
         <circle cx={cx} cy={cy} r={TR}      fill="none" stroke="rgba(255,255,255,0.06)"  strokeWidth="1" />
       </> : <>
@@ -180,11 +180,11 @@ function FanRing({ active, size = 138 }: { active: boolean; size?: number }) {
       {/* Hub */}
       <circle cx={cx} cy={cy} r={HR}
         fill={active ? '#151515' : '#161616'}
-        stroke={active ? 'rgba(174,22,22,0.72)' : 'rgba(255,255,255,0.08)'}
+        stroke={active ? 'rgba(213,112,28,0.68)' : 'rgba(255,255,255,0.08)'}
         strokeWidth="1.5"
         filter={active ? `url(#${id})` : undefined}
       />
-      <circle cx={cx} cy={cy} r={4} fill={active ? '#a91010' : '#2a2a2a'} filter={active ? `url(#${id})` : undefined} />
+      <circle cx={cx} cy={cy} r={4} fill={active ? '#bd6a20' : '#2a2a2a'} filter={active ? `url(#${id})` : undefined} />
     </svg>
   )
 }
@@ -842,9 +842,8 @@ export default function NitroApp() {
           </button>
           {/* Settings */}
           <button className={`nc-ibtn${settingsOpen ? ' active' : ''}`} title="Settings" onClick={() => setSettingsOpen(open => !open)} aria-expanded={settingsOpen}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-              <circle cx="12" cy="12" r="3"/>
-              <path strokeLinecap="round" d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M19.43 12.98c.04-.32.07-.65.07-.98s-.03-.66-.08-.98l2.11-1.65a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.61-.22l-2.49 1a7.1 7.1 0 0 0-1.69-.98L14.5 2.42A.5.5 0 0 0 14 2h-4a.5.5 0 0 0-.49.42l-.38 2.65c-.61.25-1.18.58-1.69.98l-2.49-1a.5.5 0 0 0-.61.22l-2 3.46a.5.5 0 0 0 .12.64l2.11 1.65c-.05.32-.08.66-.08.98s.03.66.08.98l-2.11 1.65a.5.5 0 0 0-.12.64l2 3.46a.5.5 0 0 0 .61.22l2.49-1c.51.4 1.08.73 1.69.98l.38 2.65A.5.5 0 0 0 10 22h4a.5.5 0 0 0 .49-.42l.38-2.65c.61-.25 1.18-.58 1.69-.98l2.49 1a.5.5 0 0 0 .61-.22l2-3.46a.5.5 0 0 0-.12-.64l-2.11-1.65zM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5z"/>
             </svg>
           </button>
           {/* Minimize */}
