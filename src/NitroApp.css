@@ -83,6 +83,7 @@ html, body, #root {
 .nc-titlebar__right {
   display: flex;
   align-items: center;
+  position: relative;
   gap: 2px;
   min-width: 195px;
   justify-content: flex-end;
@@ -120,7 +121,108 @@ html, body, #root {
   -webkit-app-region: no-drag;
 }
 .nc-ibtn:hover { color: #fff; background: rgba(255,255,255,0.09); }
+.nc-ibtn.active { color: #fff; background: rgba(232,74,26,0.18); }
 .nc-ibtn.close:hover { color: #fff; background: #c42b1c; }
+
+/* ── Advanced settings popover ─────────────────────────────── */
+.nc-settings {
+  position: absolute;
+  top: 39px;
+  right: 30px;
+  width: 290px;
+  padding: 14px 15px 12px;
+  background: #efefef;
+  color: #252525;
+  border: 1px solid #b9b9b9;
+  box-shadow: 0 12px 28px rgba(0,0,0,0.48);
+  z-index: 30;
+  -webkit-app-region: no-drag;
+}
+.nc-settings::before {
+  content: '';
+  position: absolute;
+  right: 69px;
+  top: -8px;
+  width: 14px; height: 14px;
+  background: #efefef;
+  border-left: 1px solid #b9b9b9;
+  border-top: 1px solid #b9b9b9;
+  transform: rotate(45deg);
+}
+.nc-settings h2, .nc-settings h3 { position: relative; margin: 0; font-size: 16px; font-weight: 700; }
+.nc-settings h3 { margin-top: 10px; padding-top: 9px; border-top: 1px solid #c6c6c6; font-size: 14px; }
+.nc-settings__row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 39px;
+  border-bottom: 1px solid #c6c6c6;
+  font-size: 14px;
+  cursor: pointer;
+}
+.nc-settings h3 + .nc-settings__row { border-bottom: 0; }
+.nc-switch { width: 42px; height: 22px; position: relative; display: inline-block; flex-shrink: 0; }
+.nc-switch input { opacity: 0; width: 0; height: 0; }
+.nc-switch span { position: absolute; inset: 0; background: #4a4a4a; clip-path: polygon(18% 0, 82% 0, 100% 50%, 82% 100%, 18% 100%, 0 50%); transition: background .15s; }
+.nc-switch span::after { content: ''; position: absolute; width: 17px; height: 17px; top: 2.5px; left: 4px; background: #1d1d1d; clip-path: polygon(20% 0, 80% 0, 100% 50%, 80% 100%, 20% 100%, 0 50%); transition: transform .15s, background .15s; }
+.nc-switch input:checked + span { background: #c40000; }
+.nc-switch input:checked + span::after { transform: translateX(17px); background: #f21919; }
+.nc-settings__temperature { cursor: default; }
+.nc-settings__temperature button { border: 0; background: transparent; color: #777; padding: 4px 2px; font: inherit; font-weight: 700; cursor: pointer; }
+.nc-settings__temperature button:first-of-type { margin-left: auto; }
+.nc-settings__temperature button.on { color: #ce1515; }
+
+/* ── Keyboard lighting dialog ──────────────────────────────── */
+.nc-lighting-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: rgba(0,0,0,.72);
+  -webkit-app-region: no-drag;
+}
+.nc-lighting {
+  width: 680px;
+  max-width: calc(100vw - 46px);
+  padding: 22px 28px 25px;
+  color: #ddd;
+  background: #161718;
+  border: 1px solid #777;
+  box-shadow: 0 22px 60px rgba(0,0,0,.75);
+  position: relative;
+  clip-path: polygon(16px 0, calc(100% - 16px) 0, 100% 16px, 100% calc(100% - 16px), calc(100% - 16px) 100%, 16px 100%, 0 calc(100% - 16px), 0 16px);
+}
+.nc-lighting__close { position: absolute; right: 17px; top: 9px; border: 0; background: transparent; color: #aaa; font: 32px/1 Arial; cursor: pointer; }
+.nc-lighting__close:hover { color: #fff; }
+.nc-lighting__head { display: flex; align-items: center; justify-content: space-between; padding-right: 38px; }
+.nc-lighting h2 { font-size: 17px; font-weight: 600; margin: 0; }
+.nc-lighting__brightness { display: flex; align-items: center; gap: 9px; color: #aaa; }
+.nc-lighting__brightness input { width: 150px; accent-color: #e33a12; }
+.nc-lighting__modes { display: flex; gap: 18px; margin: 16px 0 13px; }
+.nc-lighting__modes button { border: 0; padding: 0; background: transparent; color: #777; font: 14px/1.2 inherit; cursor: pointer; }
+.nc-lighting__modes button::before { content: ''; display: inline-block; width: 13px; height: 13px; margin-right: 7px; vertical-align: -2px; background: #444; clip-path: polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%); }
+.nc-lighting__modes button.on { color: #e65331; }
+.nc-lighting__modes button.on::before { background: #f01818; box-shadow: 0 0 8px #e11; }
+.nc-lighting__modes small { color: #666; font-size: 10px; margin-left: 3px; }
+.nc-keyboard { padding: 20px 28px; display: grid; grid-template-columns: repeat(12, 1fr); gap: 5px; background: #0d0e0f; border: 1px solid #202224; }
+.nc-keyboard i { display: block; height: 25px; border: 2px solid color-mix(in srgb, var(--zone-color) var(--keyboard-brightness), #151515); border-radius: 4px; box-shadow: inset 0 0 7px color-mix(in srgb, var(--zone-color) 26%, transparent); }
+.nc-keyboard i.off { border-color: #333; box-shadow: none; opacity: .35; }
+.nc-zones { display: grid; grid-template-columns: repeat(4, 1fr); margin-top: 12px; }
+.nc-zone { min-width: 0; padding: 0 16px; border-right: 1px solid #3a3a3a; display: flex; align-items: center; justify-content: center; gap: 11px; }
+.nc-zone:first-child { padding-left: 0; }
+.nc-zone:last-child { border-right: 0; padding-right: 0; }
+.nc-zone strong { color: #aaa; font-size: 13px; font-weight: 500; white-space: nowrap; }
+.nc-zone__toggle { width: 38px; height: 20px; position: relative; flex: 0 0 auto; cursor: pointer; }
+.nc-zone__toggle input { opacity: 0; width: 0; height: 0; }
+.nc-zone__toggle span { position: absolute; inset: 0; clip-path: polygon(18% 0,82% 0,100% 50%,82% 100%,18% 100%,0 50%); background: #383838; }
+.nc-zone__toggle span::after { content: ''; position: absolute; width: 15px; height: 15px; top: 2.5px; left: 4px; background: #202020; clip-path: polygon(20% 0,80% 0,100% 50%,80% 100%,20% 100%,0 50%); transition: transform .15s; }
+.nc-zone__toggle input:checked + span { background: #c40000; }
+.nc-zone__toggle input:checked + span::after { transform: translateX(15px); background: #f21c1c; }
+.nc-zone input[type=color] { width: 21px; height: 21px; padding: 0; border: 1px solid #aaa; background: transparent; cursor: pointer; }
+.nc-zone input[type=color]:disabled { opacity: .35; cursor: default; }
 
 /* ── Body ───────────────────────────────────────────────────── */
 .nc-body {
@@ -164,6 +266,9 @@ html, body, #root {
 }
 
 .nc-fan.expanded { height: 246px; }
+.nc-fan.expanded .nc-modes { padding-bottom: 78px; }
+.nc-fan.expanded .nc-vdiv { margin-bottom: 76px; }
+.nc-fan.expanded .nc-dials { padding-bottom: 68px; }
 
 /* CoolBoost */
 .nc-cb {
@@ -289,14 +394,14 @@ html, body, #root {
 /* ── Custom slider section ──────────────────────────────────── */
 .nc-custom {
   position: absolute;
-  bottom: 0; left: 0; right: 0;
+  bottom: 8px; left: 190px; right: 16px;
   background: rgba(0,0,0,0.25);
   border-top: 1px solid rgba(255,255,255,0.06);
-  padding: 8px 18px 10px;
+  padding: 6px 10px;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  border-radius: 0 0 6px 6px;
+  border-radius: 4px;
 }
 
 .nc-crow {
@@ -327,6 +432,7 @@ html, body, #root {
   user-select: none;
 }
 .nc-pm:hover { background: rgba(255,255,255,0.12); color: #fff; }
+.nc-pm:disabled { opacity: .35; cursor: default; }
 
 .nc-slider {
   flex: 1;
@@ -347,6 +453,8 @@ html, body, #root {
   transition: transform 0.1s;
 }
 .nc-slider::-webkit-slider-thumb:hover { transform: scale(1.2); }
+.nc-slider:disabled { opacity: .3; cursor: default; }
+.nc-slider:disabled::-webkit-slider-thumb { background: #777; box-shadow: none; cursor: default; }
 
 .nc-pct {
   font-size: 11px;
@@ -366,6 +474,7 @@ html, body, #root {
   flex-shrink: 0;
 }
 .nc-autobtn:hover { background: rgba(232,74,26,0.12); }
+.nc-autobtn.on { background: var(--red); color: #fff; border-color: var(--red); }
 
 /* ── Bottom row ─────────────────────────────────────────────── */
 .nc-bottom {

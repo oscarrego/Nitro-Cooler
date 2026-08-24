@@ -215,6 +215,44 @@ pub struct PersonalSettings {
     pub update_channel: UpdateChannelId,
     #[serde(default = "default_true")]
     pub check_for_updates_on_launch: bool,
+    #[serde(default)]
+    pub cool_boost_enabled: bool,
+    #[serde(default)]
+    pub custom_cpu_auto_enabled: bool,
+    #[serde(default)]
+    pub custom_gpu_auto_enabled: bool,
+    #[serde(default = "default_custom_fan_speed")]
+    pub custom_cpu_speed_percent: u8,
+    #[serde(default = "default_custom_fan_speed")]
+    pub custom_gpu_speed_percent: u8,
+    #[serde(default)]
+    pub sticky_keys_enabled: bool,
+    #[serde(default = "default_true")]
+    pub windows_menu_keys_enabled: bool,
+    #[serde(default)]
+    pub temperature_unit_fahrenheit: bool,
+    #[serde(default)]
+    pub keyboard_backlight_timeout_enabled: bool,
+    #[serde(default)]
+    pub keyboard_lighting_dynamic: bool,
+    #[serde(default = "default_keyboard_brightness")]
+    pub keyboard_brightness_percent: u8,
+    #[serde(default = "default_true")]
+    pub keyboard_zone_1_enabled: bool,
+    #[serde(default = "default_true")]
+    pub keyboard_zone_2_enabled: bool,
+    #[serde(default = "default_true")]
+    pub keyboard_zone_3_enabled: bool,
+    #[serde(default = "default_true")]
+    pub keyboard_zone_4_enabled: bool,
+    #[serde(default = "default_keyboard_color")]
+    pub keyboard_zone_1_color: String,
+    #[serde(default = "default_keyboard_color")]
+    pub keyboard_zone_2_color: String,
+    #[serde(default = "default_keyboard_color")]
+    pub keyboard_zone_3_color: String,
+    #[serde(default = "default_keyboard_color")]
+    pub keyboard_zone_4_color: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -418,6 +456,18 @@ fn default_custom_boot_filename() -> String {
 
 fn default_update_channel() -> UpdateChannelId {
     UpdateChannelId::Stable
+}
+
+fn default_custom_fan_speed() -> u8 {
+    50
+}
+
+fn default_keyboard_brightness() -> u8 {
+    75
+}
+
+fn default_keyboard_color() -> String {
+    "#ff3b00".into()
 }
 
 fn default_custom_power_base() -> CustomPowerBaseId {

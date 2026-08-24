@@ -278,8 +278,8 @@ function drawChart(canvas: HTMLCanvasElement, tempH: number[], loadH: number[]) 
 }
 
 // ─── Chart Row Component ───────────────────────────────────────────────────────
-function ChartRow({ label, tempH, loadH, curT, curL, minT, maxT }:
-  { label: string; tempH: number[]; loadH: number[]; curT: number|null; curL: number|null; minT: number; maxT: number }) {
+function ChartRow({ label, tempH, loadH, curT, curL, minT, maxT, fahrenheit }:
+  { label: string; tempH: number[]; loadH: number[]; curT: number|null; curL: number|null; minT: number; maxT: number; fahrenheit: boolean }) {
   const canRef  = useRef<HTMLCanvasElement | null>(null)
   const wrapRef = useRef<HTMLDivElement | null>(null)
 
@@ -295,10 +295,12 @@ function ChartRow({ label, tempH, loadH, curT, curL, minT, maxT }:
     drawChart(cv, tempH, loadH)
   }, [tempH, loadH])
 
+  const showTemp = (value: number) => Math.round(fahrenheit ? value * 9 / 5 + 32 : value)
+
   return (
     <div className="nc-chart">
       <div className="nc-chart__mm">
-        {minT > 0 ? `Min : ${minT}°  Max : ${maxT}°` : '\u00a0'}
+        {minT > 0 ? `Min : ${showTemp(minT)}°  Max : ${showTemp(maxT)}°` : '\u00a0'}
       </div>
       <div className="nc-chart__body">
         <div className="nc-chart__wrap" ref={wrapRef}>
@@ -306,11 +308,23 @@ function ChartRow({ label, tempH, loadH, curT, curL, minT, maxT }:
           <canvas ref={canRef} />
         </div>
         <div className="nc-chart__vals">
-          <span className="nc-chart__t">{curT != null ? `${curT}°` : '--°'}</span>
+          <span className="nc-chart__t">{curT != null ? `${showTemp(curT)}°` : '--°'}</span>
           <span className="nc-chart__l">{curL != null ? `${curL} %` : '-- %'}</span>
         </div>
       </div>
     </div>
+  )
+}
+
+function SettingSwitch({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
+  return (
+    <label className="nc-settings__row">
+      <span>{label}</span>
+      <span className="nc-switch">
+        <input type="checkbox" checked={checked} onChange={event => onChange(event.target.checked)} />
+        <span />
+      </span>
+    </label>
   )
 }
 
@@ -324,6 +338,18 @@ export default function NitroApp() {
   const [coolBoost,    setCoolBoost]    = useState(false)
   const [cpuSlider,    setCpuSlider]    = useState(50)
   const [gpuSlider,    setGpuSlider]    = useState(50)
+  const [cpuAuto,      setCpuAuto]      = useState(false)
+  const [gpuAuto,      setGpuAuto]      = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [stickyKeys,   setStickyKeys]   = useState(false)
+  const [winMenuKeys,  setWinMenuKeys]  = useState(true)
+  const [fahrenheit,   setFahrenheit]   = useState(false)
+  const [backlightOff, setBacklightOff] = useState(false)
+  const [lightingOpen, setLightingOpen] = useState(false)
+  const [lightingDynamic, setLightingDynamic] = useState(false)
+  const [keyboardBrightness, setKeyboardBrightness] = useState(75)
+  const [keyboardZones, setKeyboardZones] = useState([true, true, true, true])
+  const [keyboardColors, setKeyboardColors] = useState(['#ff3b00', '#ff3b00', '#ff3b00', '#ff3b00'])
   const [statusMsg,    setStatusMsg]    = useState('')
 
   // Backend state
@@ -435,6 +461,29 @@ export default function NitroApp() {
     setBootArt(c.personalSettings.selectedBootArt)
     setBootFile(c.personalSettings.customBootFilename)
     setUpdOnLaunch(c.personalSettings.checkForUpdatesOnLaunch)
+    setCoolBoost(c.personalSettings.coolBoostEnabled ?? false)
+    setCpuAuto(c.personalSettings.customCpuAutoEnabled ?? false)
+    setGpuAuto(c.personalSettings.customGpuAutoEnabled ?? false)
+    setCpuSlider(c.personalSettings.customCpuSpeedPercent ?? 50)
+    setGpuSlider(c.personalSettings.customGpuSpeedPercent ?? 50)
+    setStickyKeys(c.personalSettings.stickyKeysEnabled ?? false)
+    setWinMenuKeys(c.personalSettings.windowsMenuKeysEnabled ?? true)
+    setFahrenheit(c.personalSettings.temperatureUnitFahrenheit ?? false)
+    setBacklightOff(c.personalSettings.keyboardBacklightTimeoutEnabled ?? false)
+    setLightingDynamic(c.personalSettings.keyboardLightingDynamic ?? false)
+    setKeyboardBrightness(c.personalSettings.keyboardBrightnessPercent ?? 75)
+    setKeyboardZones([
+      c.personalSettings.keyboardZone1Enabled ?? true,
+      c.personalSettings.keyboardZone2Enabled ?? true,
+      c.personalSettings.keyboardZone3Enabled ?? true,
+      c.personalSettings.keyboardZone4Enabled ?? true,
+    ])
+    setKeyboardColors([
+      c.personalSettings.keyboardZone1Color ?? '#ff3b00',
+      c.personalSettings.keyboardZone2Color ?? '#ff3b00',
+      c.personalSettings.keyboardZone3Color ?? '#ff3b00',
+      c.personalSettings.keyboardZone4Color ?? '#ff3b00',
+    ])
     setOcSlot(c.activeOcSlot)
     setOcState(c.ocApplyState)
     setOcLocked(c.ocTuningLocked)
@@ -442,7 +491,13 @@ export default function NitroApp() {
   }
 
   // ── Build persist payload ─────────────────────────────────────────────────
-  function buildPayload(overrides: { activeFanProfile?: FanProfile; activePowerProfile?: PowerProfile } = {}): ControlSnapshot {
+  type SnapshotOverrides = {
+    activeFanProfile?: FanProfile
+    activePowerProfile?: PowerProfile
+    personalSettings?: Partial<ControlSnapshot['personalSettings']>
+  }
+
+  function buildPayload(overrides: SnapshotOverrides = {}): ControlSnapshot {
     return {
       activePowerProfile:   overrides.activePowerProfile ?? powerProfile,
       activeFanProfile:     overrides.activeFanProfile   ?? fanProfile,
@@ -468,15 +523,35 @@ export default function NitroApp() {
         customBootFilename: bootFile,
         updateChannel: updateCh,
         checkForUpdatesOnLaunch: updOnLaunch,
+        coolBoostEnabled: coolBoost,
+        customCpuAutoEnabled: cpuAuto,
+        customGpuAutoEnabled: gpuAuto,
+        customCpuSpeedPercent: cpuSlider,
+        customGpuSpeedPercent: gpuSlider,
+        stickyKeysEnabled: stickyKeys,
+        windowsMenuKeysEnabled: winMenuKeys,
+        temperatureUnitFahrenheit: fahrenheit,
+        keyboardBacklightTimeoutEnabled: backlightOff,
+        keyboardLightingDynamic: lightingDynamic,
+        keyboardBrightnessPercent: keyboardBrightness,
+        keyboardZone1Enabled: keyboardZones[0],
+        keyboardZone2Enabled: keyboardZones[1],
+        keyboardZone3Enabled: keyboardZones[2],
+        keyboardZone4Enabled: keyboardZones[3],
+        keyboardZone1Color: keyboardColors[0],
+        keyboardZone2Color: keyboardColors[1],
+        keyboardZone3Color: keyboardColors[2],
+        keyboardZone4Color: keyboardColors[3],
+        ...overrides.personalSettings,
       },
     }
   }
 
   // Persist saves settings to disk → remembered across restarts
-  const persist = useCallback(async (overrides: { activeFanProfile?: FanProfile; activePowerProfile?: PowerProfile } = {}) => {
+  const persist = useCallback(async (overrides: SnapshotOverrides = {}) => {
     try { await saveControlSnapshot(buildPayload(overrides)) } catch { /* non-fatal */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [powerProfile, fanProfile, custPState, custPBase, gpuTuning, ocSlot, ocState, ocLocked, fanSync, smartChg, usbPwr, pCtrl, nvTel, keepWarm, blFilter, arBat, arHz, bootArt, bootFile, updateCh, updOnLaunch])
+  }, [powerProfile, fanProfile, custPState, custPBase, gpuTuning, ocSlot, ocState, ocLocked, fanSync, smartChg, usbPwr, pCtrl, nvTel, keepWarm, blFilter, arBat, arHz, bootArt, bootFile, updateCh, updOnLaunch, coolBoost, cpuAuto, gpuAuto, cpuSlider, gpuSlider, stickyKeys, winMenuKeys, fahrenheit, backlightOff, lightingDynamic, keyboardBrightness, keyboardZones, keyboardColors])
 
   // ── Bootstrap + polling ───────────────────────────────────────────────────
   useEffect(() => {
@@ -576,12 +651,12 @@ export default function NitroApp() {
   }, [persist])
 
   // ── Fan profile apply ─────────────────────────────────────────────────────
-  async function handleFan(id: FanProfile, overrideMsg?: string) {
+  async function handleFan(id: FanProfile, overrideMsg?: string, personalSettings?: SnapshotOverrides['personalSettings']) {
     setFanProfile(id)
     setStatusMsg(overrideMsg ?? `Applying fan mode: ${id}…`)
 
     // Always persist to disk first (works offline too)
-    await persist({ activeFanProfile: id })
+    await persist({ activeFanProfile: id, personalSettings })
 
     if (!svcRef.current) {
       setStatusMsg(`Fan mode ${id} saved (service not connected).`)
@@ -641,10 +716,75 @@ export default function NitroApp() {
     }
   }
 
-  // CoolBoost
+  function buildCustomCurves(nextCpuAuto = cpuAuto, nextGpuAuto = gpuAuto, nextCpuSpeed = cpuSlider, nextGpuSpeed = gpuSlider): Curves {
+    const manual = (speed: number, fallback: Pt[]) => fallback.map(point => ({ temp: point.temp, speed }))
+    return {
+      cpu: nextCpuAuto ? DEF_CURVES.cpu : manual(nextCpuSpeed, DEF_CURVES.cpu),
+      gpu: nextGpuAuto ? DEF_CURVES.gpu : manual(nextGpuSpeed, DEF_CURVES.gpu),
+    }
+  }
+
+  async function applyCustomFanSettings(next: { cpuAuto?: boolean; gpuAuto?: boolean; cpuSpeed?: number; gpuSpeed?: number }) {
+    const nextCpuAuto = next.cpuAuto ?? cpuAuto
+    const nextGpuAuto = next.gpuAuto ?? gpuAuto
+    const nextCpuSpeed = clamp(next.cpuSpeed ?? cpuSlider, 0, 100)
+    const nextGpuSpeed = clamp(next.gpuSpeed ?? gpuSlider, 0, 100)
+    const curves = buildCustomCurves(nextCpuAuto, nextGpuAuto, nextCpuSpeed, nextGpuSpeed)
+
+    setFanProfile('custom')
+    setCpuAuto(nextCpuAuto); setGpuAuto(nextGpuAuto)
+    setCpuSlider(nextCpuSpeed); setGpuSlider(nextGpuSpeed)
+    setCurves(curves); curvesR.current = curves
+    await persist({
+      activeFanProfile: 'custom',
+      personalSettings: {
+        customCpuAutoEnabled: nextCpuAuto,
+        customGpuAutoEnabled: nextGpuAuto,
+        customCpuSpeedPercent: nextCpuSpeed,
+        customGpuSpeedPercent: nextGpuSpeed,
+      },
+    })
+
+    if (!svcRef.current) {
+      setStatusMsg('Custom fan settings saved (service not connected).')
+      return
+    }
+
+    try {
+      const result = await withTo(applyCustomFanCurves(toCurves(curves)), FAN_TO, 'custom fan settings')
+      applySnap(result.controls)
+      setStatusMsg(result.detail)
+    } catch (error) {
+      setStatusMsg(`Custom fan apply failed: ${errMsg(error)}`)
+    }
+  }
+
+  // CoolBoost uses the service Auto profile, which continuously adjusts both fan
+  // targets from CPU/GPU temperature instead of pinning the fans to maximum.
   async function handleCoolBoost(on: boolean) {
     setCoolBoost(on)
-    await handleFan(on ? 'max' : 'auto')
+    await handleFan('auto', on ? 'CoolBoost enabled: temperature-based fan control active.' : 'CoolBoost disabled: standard automatic fan control active.', { coolBoostEnabled: on })
+  }
+
+  async function saveAdvancedSetting(setting: SnapshotOverrides['personalSettings']) {
+    await persist({ personalSettings: setting })
+  }
+
+  function saveKeyboardLighting(next: { dynamic?: boolean; brightness?: number; zones?: boolean[]; colors?: string[] }) {
+    const dynamic = next.dynamic ?? lightingDynamic
+    const brightness = clamp(next.brightness ?? keyboardBrightness, 0, 100)
+    const zones = next.zones ?? keyboardZones
+    const colors = next.colors ?? keyboardColors
+    setLightingDynamic(dynamic)
+    setKeyboardBrightness(brightness)
+    setKeyboardZones(zones)
+    setKeyboardColors(colors)
+    void persist({ personalSettings: {
+      keyboardLightingDynamic: dynamic,
+      keyboardBrightnessPercent: brightness,
+      keyboardZone1Enabled: zones[0], keyboardZone2Enabled: zones[1], keyboardZone3Enabled: zones[2], keyboardZone4Enabled: zones[3],
+      keyboardZone1Color: colors[0], keyboardZone2Color: colors[1], keyboardZone3Color: colors[2], keyboardZone4Color: colors[3],
+    }})
   }
 
   // Window controls
@@ -690,7 +830,7 @@ export default function NitroApp() {
             <span className="nc-gfe__txt">GEFORCE<br/>EXPERIENCE</span>
           </div>
           {/* Keyboard */}
-          <button className="nc-ibtn" title="Keyboard">
+          <button className={`nc-ibtn${lightingOpen ? ' active' : ''}`} title="Keyboard lighting" onClick={() => setLightingOpen(open => !open)} aria-expanded={lightingOpen}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
               <rect x="2" y="7" width="20" height="11" rx="2"/>
               <line x1="6" y1="11" x2="6" y2="11" strokeWidth="2.5" strokeLinecap="round"/>
@@ -700,20 +840,8 @@ export default function NitroApp() {
               <line x1="8" y1="15" x2="16" y2="15" strokeWidth="2" strokeLinecap="round"/>
             </svg>
           </button>
-          {/* Audio */}
-          <button className="nc-ibtn" title="Audio">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
-              <line x1="2"  y1="10" x2="2"  y2="14" strokeLinecap="round"/>
-              <line x1="5"  y1="7"  x2="5"  y2="17" strokeLinecap="round"/>
-              <line x1="8"  y1="4"  x2="8"  y2="20" strokeLinecap="round"/>
-              <line x1="11" y1="8"  x2="11" y2="16" strokeLinecap="round"/>
-              <line x1="14" y1="5"  x2="14" y2="19" strokeLinecap="round"/>
-              <line x1="17" y1="9"  x2="17" y2="15" strokeLinecap="round"/>
-              <line x1="20" y1="11" x2="20" y2="13" strokeLinecap="round"/>
-            </svg>
-          </button>
           {/* Settings */}
-          <button className="nc-ibtn" title="Settings">
+          <button className={`nc-ibtn${settingsOpen ? ' active' : ''}`} title="Settings" onClick={() => setSettingsOpen(open => !open)} aria-expanded={settingsOpen}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
               <circle cx="12" cy="12" r="3"/>
               <path strokeLinecap="round" d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
@@ -729,8 +857,64 @@ export default function NitroApp() {
               <path fill="currentColor" d="M6 4.586L1.707.293.293 1.707 4.586 6 .293 10.293l1.414 1.414L6 7.414l4.293 4.293 1.414-1.414L7.414 6l4.293-4.293L10.293.293z"/>
             </svg>
           </button>
+          {settingsOpen && (
+            <section className="nc-settings" aria-label="Advanced settings">
+              <h2>Advanced Settings</h2>
+              <SettingSwitch label="Sticky keys" checked={stickyKeys} onChange={checked => { setStickyKeys(checked); void saveAdvancedSetting({ stickyKeysEnabled: checked }) }} />
+              <SettingSwitch label="Windows and menu key" checked={winMenuKeys} onChange={checked => { setWinMenuKeys(checked); void saveAdvancedSetting({ windowsMenuKeysEnabled: checked }) }} />
+              <div className="nc-settings__row nc-settings__temperature">
+                <span>Temperature units</span>
+                <button className={!fahrenheit ? 'on' : ''} onClick={() => { setFahrenheit(false); void saveAdvancedSetting({ temperatureUnitFahrenheit: false }) }}>°C</button>
+                <button className={fahrenheit ? 'on' : ''} onClick={() => { setFahrenheit(true); void saveAdvancedSetting({ temperatureUnitFahrenheit: true }) }}>°F</button>
+              </div>
+              <h3>Keyboard Settings</h3>
+              <SettingSwitch label="Backlight off after 30 seconds" checked={backlightOff} onChange={checked => { setBacklightOff(checked); void saveAdvancedSetting({ keyboardBacklightTimeoutEnabled: checked }) }} />
+            </section>
+          )}
         </div>
       </header>
+
+      {lightingOpen && (
+        <div className="nc-lighting-overlay" role="dialog" aria-modal="true" aria-label="Keyboard lighting">
+          <section className="nc-lighting">
+            <button className="nc-lighting__close" title="Close keyboard lighting" onClick={() => setLightingOpen(false)}>×</button>
+            <div className="nc-lighting__head">
+              <h2>Keyboard Lighting</h2>
+              <div className="nc-lighting__brightness">
+                <span>◌</span>
+                <input type="range" min="0" max="100" value={keyboardBrightness} onChange={event => saveKeyboardLighting({ brightness: +event.target.value })} />
+                <span>☼</span>
+              </div>
+            </div>
+            <div className="nc-lighting__modes">
+              <button className={!lightingDynamic ? 'on' : ''} onClick={() => saveKeyboardLighting({ dynamic: false })}>Static</button>
+              <button className={lightingDynamic ? 'on' : ''} onClick={() => saveKeyboardLighting({ dynamic: true })}>Dynamic <small>coming later</small></button>
+            </div>
+            <div className="nc-keyboard" style={{ '--keyboard-brightness': `${keyboardBrightness}%` } as React.CSSProperties}>
+              {Array.from({ length: 48 }, (_, key) => {
+                const zone = Math.min(3, Math.floor((key % 12) / 3))
+                return <i key={key} className={!keyboardZones[zone] ? 'off' : ''} style={{ '--zone-color': keyboardColors[zone] } as React.CSSProperties} />
+              })}
+            </div>
+            <div className="nc-zones">
+              {keyboardZones.map((enabled, index) => (
+                <div className="nc-zone" key={index}>
+                  <strong>Zone {index + 1}</strong>
+                  <label className="nc-zone__toggle">
+                    <input type="checkbox" checked={enabled} onChange={event => {
+                      const zones = [...keyboardZones]; zones[index] = event.target.checked; saveKeyboardLighting({ zones })
+                    }} />
+                    <span />
+                  </label>
+                  <input aria-label={`Zone ${index + 1} color`} type="color" value={keyboardColors[index]} disabled={!enabled || lightingDynamic} onChange={event => {
+                    const colors = [...keyboardColors]; colors[index] = event.target.value; saveKeyboardLighting({ colors })
+                  }} />
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
 
       {/* ── BODY ──────────────────────────────────────────────────────────── */}
       <div className="nc-body">
@@ -809,28 +993,32 @@ export default function NitroApp() {
               {/* CPU slider row */}
               <div className="nc-crow">
                 <span className="nc-cname">CPU</span>
-                <button className="nc-pm"
-                  onClick={() => setCpuSlider(v => Math.max(0, v - 5))}>−</button>
+                <button className="nc-pm" disabled={cpuAuto}
+                  onClick={() => void applyCustomFanSettings({ cpuSpeed: cpuSlider - 5 })}>−</button>
                 <input type="range" min={0} max={100} value={cpuSlider}
-                  className="nc-slider"
-                  onChange={e => setCpuSlider(+e.target.value)} />
-                <button className="nc-pm"
-                  onClick={() => setCpuSlider(v => Math.min(100, v + 5))}>+</button>
+                  className="nc-slider" disabled={cpuAuto}
+                  onChange={e => setCpuSlider(+e.target.value)}
+                  onPointerUp={e => void applyCustomFanSettings({ cpuSpeed: +(e.currentTarget as HTMLInputElement).value })}
+                  onKeyUp={e => void applyCustomFanSettings({ cpuSpeed: +(e.currentTarget as HTMLInputElement).value })} />
+                <button className="nc-pm" disabled={cpuAuto}
+                  onClick={() => void applyCustomFanSettings({ cpuSpeed: cpuSlider + 5 })}>+</button>
                 <span className="nc-pct">{cpuSlider}%</span>
-                <button className="nc-autobtn" onClick={() => void handleFan('auto')}>Auto</button>
+                <button className={`nc-autobtn${cpuAuto ? ' on' : ''}`} onClick={() => void applyCustomFanSettings({ cpuAuto: !cpuAuto })}>Auto</button>
               </div>
               {/* GPU slider row */}
               <div className="nc-crow">
                 <span className="nc-cname">GPU</span>
-                <button className="nc-pm"
-                  onClick={() => setGpuSlider(v => Math.max(0, v - 5))}>−</button>
+                <button className="nc-pm" disabled={gpuAuto}
+                  onClick={() => void applyCustomFanSettings({ gpuSpeed: gpuSlider - 5 })}>−</button>
                 <input type="range" min={0} max={100} value={gpuSlider}
-                  className="nc-slider"
-                  onChange={e => setGpuSlider(+e.target.value)} />
-                <button className="nc-pm"
-                  onClick={() => setGpuSlider(v => Math.min(100, v + 5))}>+</button>
+                  className="nc-slider" disabled={gpuAuto}
+                  onChange={e => setGpuSlider(+e.target.value)}
+                  onPointerUp={e => void applyCustomFanSettings({ gpuSpeed: +(e.currentTarget as HTMLInputElement).value })}
+                  onKeyUp={e => void applyCustomFanSettings({ gpuSpeed: +(e.currentTarget as HTMLInputElement).value })} />
+                <button className="nc-pm" disabled={gpuAuto}
+                  onClick={() => void applyCustomFanSettings({ gpuSpeed: gpuSlider + 5 })}>+</button>
                 <span className="nc-pct">{gpuSlider}%</span>
-                <button className="nc-autobtn" onClick={() => void handleFan('auto')}>Auto</button>
+                <button className={`nc-autobtn${gpuAuto ? ' on' : ''}`} onClick={() => void applyCustomFanSettings({ gpuAuto: !gpuAuto })}>Auto</button>
               </div>
             </div>
           )}
@@ -870,21 +1058,21 @@ export default function NitroApp() {
             <span className="nc-tab">Monitoring</span>
             <div className="nc-mon__inner">
               <div className="nc-mon__hdr">
-                <span className="nc-mon__axis">Temperature (°C) / Loading (%)</span>
+                <span className="nc-mon__axis">Temperature (°{fahrenheit ? 'F' : 'C'}) / Loading (%)</span>
               </div>
               <ChartRow
                 label="CPU"
                 tempH={cpuTH} loadH={cpuLH}
                 curT={curCpuT != null ? Math.round(curCpuT) : null}
                 curL={curCpuU != null ? Math.round(curCpuU) : null}
-                minT={cpuMin} maxT={cpuMax}
+                minT={cpuMin} maxT={cpuMax} fahrenheit={fahrenheit}
               />
               <ChartRow
                 label="GPU"
                 tempH={gpuTH} loadH={gpuLH}
                 curT={curGpuT != null ? Math.round(curGpuT) : null}
                 curL={curGpuU != null ? Math.round(curGpuU) : null}
-                minT={gpuMin} maxT={gpuMax}
+                minT={gpuMin} maxT={gpuMax} fahrenheit={fahrenheit}
               />
             </div>
           </div>

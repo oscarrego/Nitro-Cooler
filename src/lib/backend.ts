@@ -111,6 +111,25 @@ export type PersonalSettings = {
   customBootFilename: string
   updateChannel: 'stable' | 'preview'
   checkForUpdatesOnLaunch: boolean
+  coolBoostEnabled: boolean
+  customCpuAutoEnabled: boolean
+  customGpuAutoEnabled: boolean
+  customCpuSpeedPercent: number
+  customGpuSpeedPercent: number
+  stickyKeysEnabled: boolean
+  windowsMenuKeysEnabled: boolean
+  temperatureUnitFahrenheit: boolean
+  keyboardBacklightTimeoutEnabled: boolean
+  keyboardLightingDynamic: boolean
+  keyboardBrightnessPercent: number
+  keyboardZone1Enabled: boolean
+  keyboardZone2Enabled: boolean
+  keyboardZone3Enabled: boolean
+  keyboardZone4Enabled: boolean
+  keyboardZone1Color: string
+  keyboardZone2Color: string
+  keyboardZone3Color: string
+  keyboardZone4Color: string
 }
 
 export type ControlSnapshot = {

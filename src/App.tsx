@@ -1336,6 +1336,25 @@ function buildControlSnapshotForPersistence(input: {
       customBootFilename: input.customBootFilename,
       updateChannel: input.updateChannel,
       checkForUpdatesOnLaunch: input.checkForUpdatesOnLaunch,
+      coolBoostEnabled: false,
+      customCpuAutoEnabled: false,
+      customGpuAutoEnabled: false,
+      customCpuSpeedPercent: 50,
+      customGpuSpeedPercent: 50,
+      stickyKeysEnabled: false,
+      windowsMenuKeysEnabled: true,
+      temperatureUnitFahrenheit: false,
+      keyboardBacklightTimeoutEnabled: false,
+      keyboardLightingDynamic: false,
+      keyboardBrightnessPercent: 75,
+      keyboardZone1Enabled: true,
+      keyboardZone2Enabled: true,
+      keyboardZone3Enabled: true,
+      keyboardZone4Enabled: true,
+      keyboardZone1Color: '#ff3b00',
+      keyboardZone2Color: '#ff3b00',
+      keyboardZone3Color: '#ff3b00',
+      keyboardZone4Color: '#ff3b00',
     },
   }
 }
@@ -5996,4 +6015,3 @@ function FanCurvePanel({
 }
 
 export default App
-
