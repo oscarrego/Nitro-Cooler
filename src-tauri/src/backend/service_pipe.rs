@@ -220,7 +220,7 @@ fn build_cached_service_status(detail_seed: &str, trust_fresh_snapshot: bool) ->
         }
     } else if detail_seed.contains("os error 2") {
         format!(
-            "{SERVICE_NAME} is not installed or is not running. Install AeroForge with the setup installer, or start {SERVICE_NAME}. Raw pipe error: {detail_seed}"
+            "{SERVICE_NAME} is not installed or is not running. Install Nitro Cooler with the setup installer, or start {SERVICE_NAME}. Raw pipe error: {detail_seed}"
         )
     } else {
         format!("Service unavailable: {detail_seed}")

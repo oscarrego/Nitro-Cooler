@@ -215,11 +215,11 @@ pub struct PersonalSettings {
     pub update_channel: UpdateChannelId,
     #[serde(default = "default_true")]
     pub check_for_updates_on_launch: bool,
-    #[serde(default)]
+    #[serde(default = "default_true")]
     pub cool_boost_enabled: bool,
-    #[serde(default)]
+    #[serde(default = "default_true")]
     pub custom_cpu_auto_enabled: bool,
-    #[serde(default)]
+    #[serde(default = "default_true")]
     pub custom_gpu_auto_enabled: bool,
     #[serde(default = "default_custom_fan_speed")]
     pub custom_cpu_speed_percent: u8,

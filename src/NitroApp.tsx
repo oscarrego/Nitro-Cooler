@@ -92,8 +92,8 @@ function FanRing({ active, size = 138 }: { active: boolean; size?: number }) {
   const TR = OR - 11          // tooth inner
   const BR = OR - 14          // blade reach
   const HR = size * 0.10      // hub
-  const N  = 58               // teeth
-  const B  = 6                // blades
+  const N  = 0                // no toothed ring: the original uses slim blades
+  const B  = 24               // slim radial fan blades
   const id = `fg${active ? 'a' : 'i'}${size}`
 
   // Teeth — arc segments
@@ -151,9 +151,9 @@ function FanRing({ active, size = 138 }: { active: boolean; size?: number }) {
 
       {/* Outer glow rings */}
       {active ? <>
-        <circle cx={cx} cy={cy} r={OR - 2}  fill="none" stroke="rgba(225,75,10,0.6)"  strokeWidth="2.5" filter={`url(#${id})`} />
-        <circle cx={cx} cy={cy} r={OR - 7}  fill="none" stroke="rgba(180,50,0,0.25)"  strokeWidth="5" />
-        <circle cx={cx} cy={cy} r={TR}      fill="none" stroke="rgba(140,38,0,0.18)"  strokeWidth="3" />
+        <circle cx={cx} cy={cy} r={OR - 2}  fill="none" stroke="rgba(174,22,22,0.84)"  strokeWidth="1.5" filter={`url(#${id})`} />
+        <circle cx={cx} cy={cy} r={OR - 7}  fill="none" stroke="rgba(255,255,255,0.10)"  strokeWidth="1" />
+        <circle cx={cx} cy={cy} r={TR}      fill="none" stroke="rgba(255,255,255,0.06)"  strokeWidth="1" />
       </> : <>
         <circle cx={cx} cy={cy} r={OR - 2} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="1.5" />
       </>}
@@ -171,20 +171,20 @@ function FanRing({ active, size = 138 }: { active: boolean; size?: number }) {
       {/* Blades */}
       {blades.map((d, i) => (
         <path key={i} d={d}
-          fill={active ? '#2b0e04' : '#1c1c1c'}
-          stroke={active ? 'rgba(255,90,20,0.38)' : 'rgba(255,255,255,0.07)'}
-          strokeWidth="0.8"
+          fill={active ? '#747474' : '#252525'}
+          stroke={active ? 'rgba(210,210,210,0.58)' : 'rgba(255,255,255,0.10)'}
+          strokeWidth="0.55"
         />
       ))}
 
       {/* Hub */}
       <circle cx={cx} cy={cy} r={HR}
-        fill={active ? '#190905' : '#161616'}
-        stroke={active ? 'rgba(255,80,20,0.58)' : 'rgba(255,255,255,0.08)'}
+        fill={active ? '#151515' : '#161616'}
+        stroke={active ? 'rgba(174,22,22,0.72)' : 'rgba(255,255,255,0.08)'}
         strokeWidth="1.5"
         filter={active ? `url(#${id})` : undefined}
       />
-      <circle cx={cx} cy={cy} r={4} fill={active ? '#e84a1a' : '#2a2a2a'} filter={active ? `url(#${id})` : undefined} />
+      <circle cx={cx} cy={cy} r={4} fill={active ? '#a91010' : '#2a2a2a'} filter={active ? `url(#${id})` : undefined} />
     </svg>
   )
 }
@@ -335,11 +335,11 @@ export default function NitroApp() {
   const [fanProfile,   setFanProfile]   = useState<FanProfile>('auto')
   const [powerProfile, setPowerProfile] = useState<PowerProfile>('battery-guard')
   const [acMode,       setAcMode]       = useState<AcMode>('ac')
-  const [coolBoost,    setCoolBoost]    = useState(false)
+  const [coolBoost,    setCoolBoost]    = useState(true)
   const [cpuSlider,    setCpuSlider]    = useState(50)
   const [gpuSlider,    setGpuSlider]    = useState(50)
-  const [cpuAuto,      setCpuAuto]      = useState(false)
-  const [gpuAuto,      setGpuAuto]      = useState(false)
+  const [cpuAuto,      setCpuAuto]      = useState(true)
+  const [gpuAuto,      setGpuAuto]      = useState(true)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [stickyKeys,   setStickyKeys]   = useState(false)
   const [winMenuKeys,  setWinMenuKeys]  = useState(true)
@@ -461,9 +461,9 @@ export default function NitroApp() {
     setBootArt(c.personalSettings.selectedBootArt)
     setBootFile(c.personalSettings.customBootFilename)
     setUpdOnLaunch(c.personalSettings.checkForUpdatesOnLaunch)
-    setCoolBoost(c.personalSettings.coolBoostEnabled ?? false)
-    setCpuAuto(c.personalSettings.customCpuAutoEnabled ?? false)
-    setGpuAuto(c.personalSettings.customGpuAutoEnabled ?? false)
+    setCoolBoost(c.personalSettings.coolBoostEnabled ?? true)
+    setCpuAuto(c.personalSettings.customCpuAutoEnabled ?? true)
+    setGpuAuto(c.personalSettings.customGpuAutoEnabled ?? true)
     setCpuSlider(c.personalSettings.customCpuSpeedPercent ?? 50)
     setGpuSlider(c.personalSettings.customGpuSpeedPercent ?? 50)
     setStickyKeys(c.personalSettings.stickyKeysEnabled ?? false)
@@ -808,7 +808,7 @@ export default function NitroApp() {
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
-  const spinDur = dialFast ? '1.0s' : '3.5s'
+  const spinDur = fanProfile === 'max' ? '0.9s' : coolBoost ? '1.7s' : '5.2s'
   const isCustom = fanProfile === 'custom'
 
   return (
@@ -816,7 +816,7 @@ export default function NitroApp() {
 
       {/* ── TITLEBAR ──────────────────────────────────────────────────────── */}
       <header className="nc-titlebar">
-        <span className="nc-titlebar__acer">acer</span>
+        <span className="nc-titlebar__acer" aria-label="Acer">acer</span>
 
         <div className="nc-titlebar__title">
           <span className="nc-titlebar__bold">NITRO</span>
@@ -825,7 +825,7 @@ export default function NitroApp() {
 
         <div className="nc-titlebar__right">
           {/* GeForce Experience */}
-          <div className="nc-gfe">
+          <div className="nc-gfe" aria-label="GeForce Experience branding">
             <div className="nc-gfe__dot">G</div>
             <span className="nc-gfe__txt">GEFORCE<br/>EXPERIENCE</span>
           </div>
@@ -888,7 +888,7 @@ export default function NitroApp() {
             </div>
             <div className="nc-lighting__modes">
               <button className={!lightingDynamic ? 'on' : ''} onClick={() => saveKeyboardLighting({ dynamic: false })}>Static</button>
-              <button className={lightingDynamic ? 'on' : ''} onClick={() => saveKeyboardLighting({ dynamic: true })}>Dynamic <small>coming later</small></button>
+              <button disabled title="Dynamic lighting will be available in a future update">Dynamic <small>coming later</small></button>
             </div>
             <div className="nc-keyboard" style={{ '--keyboard-brightness': `${keyboardBrightness}%` } as React.CSSProperties}>
               {Array.from({ length: 48 }, (_, key) => {

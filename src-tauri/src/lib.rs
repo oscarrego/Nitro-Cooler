@@ -73,7 +73,7 @@ pub fn run() {
 
             if cfg!(debug_assertions) {
                 if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.set_title("AeroForge Control [DEV]");
+                    let _ = window.set_title("Nitro Cooler [DEV]");
                 }
 
                 app.handle().plugin(

@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "NitroCooler",
+  "productName": "Nitro Cooler",
   "version": "0.16.3",
-  "identifier": "com.noah.aeroforgecontrol",
+  "identifier": "com.nitrocooler.desktop",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:1420",
@@ -56,11 +56,7 @@
       }
     },
     "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
+      "../assets/nitrocooler logo.ico"
     ]
   }
 }
