@@ -12,7 +12,8 @@ Nitro Cooler is a Windows desktop companion for supported Acer Nitro laptops —
 
 ## Preview
 
-![Nitro Cooler Preview](assets/preview.gif)
+<img src="assets/preview.gif" alt="Nitro Cooler Preview" width="100%" />
+
 
 ---
 
