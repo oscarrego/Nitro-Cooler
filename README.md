@@ -1,39 +1,35 @@
 # Nitro Cooler
 
-> **⚠️ This is not a replacement for NitroSense.**
-> Acer's official [NitroSense](https://www.acer.com/us-en/gaming/nitro) software is the recommended way to manage your Acer Nitro laptop. Nitro Cooler exists for a very specific reason: on my machine, NitroSense simply **would not open** — no error, no window, nothing. After exhausting every fix (reinstalling, repairing the Microsoft Store, running compatibility troubleshooters, updating every driver), it still refused to launch. Rather than give up and lose fan and power control entirely, I built my own tool. **If NitroSense works for you, use that.** Nitro Cooler is for people who, for whatever reason, can't get the official app running.
+> [!NOTE]
+> **Not a replacement for NitroSense.** Use Acer's official app if it works for you. I built Nitro Cooler because NitroSense silently refused to open on my machine — no error, no window — and after every fix I could find failed, I needed fan and power control somehow.
 
-Nitro Cooler is a Windows desktop companion for supported Acer Nitro laptops. It provides a NitroSense-inspired interface for monitoring temperatures and fan speed, choosing supported fan and power profiles, and saving your preferred controls between launches.
+Nitro Cooler is a Windows desktop companion for supported Acer Nitro laptops — fan monitoring, fan profiles, power profiles, and persistent settings between launches.
 
 > [!WARNING]
-> Nitro Cooler is not made, endorsed, or supported by Acer. Fan and power controls can affect temperature, noise, power use, and system stability. Use it only on supported hardware and at your own risk.
+> Not made, endorsed, or supported by Acer. Fan and power controls affect temperature, noise, and stability. Use on supported hardware at your own risk.
 
 ---
 
 ## Preview
 
-https://github.com/oscarrego/Nitro-Cooler/assets/preview.mov
-
-> Can't see the video? Find it at [`assets/preview.mov`](assets/preview.mov).
+![Nitro Cooler Preview](assets/preview.mov)
 
 ---
 
-## Download and Install
+## Download — NitroCooler v1.0
 
-For a normal installation, use the **Setup EXE** from the GitHub Release assets:
+Get the **[latest release →](../../releases/latest)**
 
-```
-Nitro Cooler_0.16.3_x64-setup.exe
-```
+| File | Purpose |
+|---|---|
+| `NitroCooler-v1.0-setup.exe` | ✅ Full installer — installs the app, AeroForge service, PawnIO drivers |
+| `NitroCooler-v1.0-portable.zip` | Portable UI only — still needs the Setup EXE run once on a new machine |
 
-1. Download the Setup EXE.
-2. Right-click it and choose **Run as administrator**.
-3. Accept the Windows security / UAC prompt.
-4. Complete the installer — it installs Nitro Cooler, the required AeroForge hardware service, its helper, the WebView runtime loader, and the required PawnIO resources.
-5. Open **Nitro Cooler** from the Start menu or its desktop shortcut.
-
-> [!NOTE]
-> The **portable ZIP** (`NitroCooler_0.16.3_x64-portable.zip`) is optional. Extract it and run `aeroforge-control.exe`. Useful for carrying the UI, but a new computer still needs the Setup EXE first — the Windows service must be installed with administrator permission before hardware control works.
+**Steps:**
+1. Download `NitroCooler-v1.0-setup.exe`
+2. Right-click → **Run as administrator**
+3. Accept the UAC prompt and complete the installer
+4. Open **Nitro Cooler** from the Start menu or desktop shortcut
 
 ---
 
@@ -43,132 +39,120 @@ Nitro Cooler_0.16.3_x64-setup.exe
 
 | Feature | Details |
 |---|---|
-| Live telemetry | CPU & GPU temperature, utilisation, and RPM |
-| Animated dials | CPU / GPU fan speed visualisation |
+| Live telemetry | CPU & GPU temperature, utilisation, clock speed, and RPM |
+| Fan dials | Animated CPU / GPU fan speed gauges |
 | Auto mode | Temperature-curve-based automatic fan control |
-| Max mode | Pushes fans to maximum speed |
-| Custom mode | Separate CPU and GPU fan sliders |
-| CoolBoost | Temperature-based auto control (not locked-max) |
+| Max mode | Locks fans to maximum speed |
+| Custom mode | Independent CPU and GPU fan sliders with per-fan Auto toggle |
+| CoolBoost | Smart temp-based control — not just locked-max |
+| Fan calibration | Sweep-based RPM calibration tool |
 | History graphs | Temperature and load over time |
 
 ### Power Profiles
 
-- Power Saver
-- Balanced
-- Balanced (Acer Optimised)
-- High-Performance
-- AC / Battery display selector
+- Power Saver · Balanced · Balanced (Acer Optimised) · High-Performance
+- GPU tuning — core clock, memory clock, voltage offset, power limit, temp limit
+- OC presets with named slots
+- Smart charging (battery health mode)
+- AC / Battery view selector
 
-### Interface Controls
+### Interface and Extras
 
-- Minimize and Close buttons
-- All fan, power, CoolBoost, and Custom settings restored on relaunch
+- All settings (fan, power, CoolBoost, custom curves) restored on relaunch
 - Celsius / Fahrenheit toggle
-- Keyboard-lighting window — brightness, four visual zones, zone colours, zone on/off
-- Advanced settings — Sticky Keys, Windows / Menu key behaviour, backlight timeout
-
----
-
-## Hardware-Support Notes
-
-The following controls are connected to the installed background service when it reports support on the laptop:
-
-- Fan profiles: Auto, Max, and Custom curves
-- CPU / GPU custom fan settings
-- CoolBoost automatic fan behaviour
-- Power profiles
-- Live hardware telemetry
-
-> [!NOTE]
-> The keyboard-lighting controls and the Sticky Keys, Windows/Menu key, and backlight-timeout switches are currently **saved preferences only**. The bundled service does not yet expose verified Acer firmware commands for these features, so they are restored by Nitro Cooler but should not be treated as physical keyboard/firmware control. Dynamic keyboard lighting is deliberately marked as coming later.
-
-The AC/Battery selector changes the interface view. Select a power-profile button to apply a power profile.
+- Blue light filter
+- Auto display refresh rate on battery
+- Boot logo customisation (Ember, Arc, Slate, custom image)
+- Keyboard-lighting — brightness, 4 zones, zone colours, zone on/off *(saved preferences — firmware write coming later)*
+- Advanced — Sticky Keys, Windows/Menu key lock, backlight timeout
+- Global Nitro key shortcut (via hotkey helper)
+- Auto-updater (stable / preview channel)
+- Single-instance enforcement
 
 ---
 
 ## Architecture
 
 ```mermaid
-flowchart TD
-    User([User])
+flowchart LR
+    User(["👤 User"])
 
-    subgraph Frontend["Frontend"]
-        UI["Nitro Cooler UI\nReact + TypeScript"]
+    User -->|clicks| UI
+
+    subgraph App["Tauri Desktop App  •  Rust"]
+        direction TB
+        TauriCore["Tauri Core\n(commands.rs)"]
+        State["Persisted Settings\n(JSON on disk)"]
+        NitroKey["Hotkey Helper\n(global Nitro key)"]
+        Updater["Auto-Updater"]
+        TauriCore <-->|read/write| State
+        TauriCore --- NitroKey
+        TauriCore --- Updater
     end
 
-    subgraph Desktop["Desktop Layer (Rust / Tauri)"]
-        App[Tauri Core]
-        State[Local Persisted Settings]
-        Helper[Hotkey Helper]
+    subgraph Frontend["Frontend  •  React + TypeScript"]
+        UI["Nitro Cooler UI\n(App.tsx / NitroApp.tsx)"]
     end
 
-    subgraph WinSys["Windows System Layer"]
-        Service[AeroForge Windows Service]
-        Drivers[PawnIO Resources / Drivers]
+    subgraph Service["AeroForge Windows Service  •  Rust"]
+        direction TB
+        IPC["IPC Pipe Worker"]
+        Control["Control Worker\n(fan / power apply)"]
+        Telemetry["Telemetry Worker\n(CPU, GPU, sensors)"]
+        Capability["Capability Worker\n(hardware probe)"]
+        Persistence["Persistence Worker\n(service state)"]
+        LowLevel["Low-Level Worker\n(PawnIO / WinRing0)"]
     end
 
     subgraph HW["Hardware"]
         FW["Acer Laptop Firmware\nFans · Sensors · Power"]
     end
 
-    Installer["NSIS Setup EXE"]
+    UI -->|Tauri invoke| TauriCore
+    NitroKey -->|global shortcut| UI
+    TauriCore <-->|named pipe IPC| IPC
+    IPC --- Control
+    IPC --- Telemetry
+    IPC --- Capability
+    IPC --- Persistence
+    Control --> LowLevel
+    Telemetry --> LowLevel
+    LowLevel -->|PawnIO / WinRing0 / WMI| FW
+    Control -->|Acer HID / WMI| FW
 
-    User -->|interacts with| UI
-    UI -->|Tauri commands| App
-    App -->|read / write| State
-    App -->|telemetry + fan/power commands| Service
-    App --- Helper
-    Helper -->|Nitro key / global shortcut| UI
-    Service -->|hardware interfaces| FW
-    Installer -->|installs| App
+    Installer["NSIS Setup EXE"] -->|installs| App
     Installer -->|installs| Service
-    Installer -->|installs| Drivers
-    Drivers -->|low-level access| FW
+    Installer -->|installs PawnIO| LowLevel
 ```
 
-The window you see is React + TypeScript. It sends commands through the Rust Tauri layer. The Rust layer talks to the installed Windows service, which is the **only** component permitted to communicate with supported hardware interfaces. The UI alone cannot control the fans.
+**Data flow in plain English:**
 
----
+1. You interact with the **React UI** running inside a Tauri WebView window.
+2. The UI calls **Tauri commands** (Rust) via `invoke()`.
+3. The Rust core talks to the **AeroForge Windows service** through a local named pipe.
+4. The service's **Control** and **Telemetry** workers read and write Acer hardware through **PawnIO / WinRing0 drivers** and Windows WMI/HID interfaces.
+5. The **Hotkey Helper** binary runs separately and fires the global Nitro key shortcut back to the UI.
+6. Settings are persisted to a local JSON config file by the Rust core.
 
-## Release Files
-
-Create a **GitHub Release** for each version and attach these files from the local `portable` folder:
-
-| File | Required | Purpose |
-|---|---|---|
-| `NitroCooler_0.16.3_x64-setup.exe` | ✅ Yes | Full installer — includes the service and hardware resources |
-| `NitroCooler_0.16.3_x64-portable.zip` | Optional | Portable UI — still needs the Setup EXE on a new machine |
-| `AeroForge-Debug-Collector-0.16.3.zip` | Optional | Diagnostics collector for bug reports |
-
-> [!CAUTION]
-> Do **not** upload the whole `portable` folder, `node_modules`, `dist`, or `src-tauri/target` to GitHub Releases. Upload only the individual files listed above.
-
-For the GitHub **repository**, push the source code: `src`, `src-tauri`, `aeroforge-service`, `assets`, `scripts`, `package.json`, `package-lock.json`, `Cargo.toml`, and `Cargo.lock`. Do not commit generated build folders or release binaries.
+The UI **cannot** control hardware directly — it always goes through the service.
 
 ---
 
 ## Build from Source
 
-**Prerequisites:**
-
-- Windows 10 / 11 x64
-- Node.js and npm
-- Rust (GNU Windows target)
-- LLVM-MinGW on `PATH`
-- NSIS (normally supplied through the Tauri bundling toolchain)
-
-**Build:**
+**Prerequisites:** Windows 10/11 x64 · Node.js + npm · Rust (GNU target) · LLVM-MinGW on `PATH` · NSIS
 
 ```powershell
 npm run tauri:build
 powershell -ExecutionPolicy Bypass -File scripts/Make-Portable.ps1
 ```
 
-The installer will be written to `src-tauri/target/release/bundle/nsis`.
-The portable ZIP will be written to `portable/`.
+Installer → `src-tauri/target/release/bundle/nsis/`  
+Portable ZIP → `portable/`
 
 ---
 
 ## Credits and Licence
 
 Nitro Cooler is a fork of [AeroForge NitroSense Alternative](https://github.com/noahcabral/aeroforge-nitrosense-alternative). Credit belongs to the original author and contributors. See the upstream project for the applicable licence and attribution requirements.
+
