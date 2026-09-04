@@ -5,6 +5,8 @@
 
 Nitro Cooler is a Windows desktop companion for supported Acer Nitro laptops - fan monitoring, fan profiles, power profiles, and persistent settings between launches.
 
+This app has been tested on the **Acer Nitro AN515-56** model.
+
 > [!WARNING]
 > Not made, endorsed, or supported by Acer. Fan and power controls affect temperature, noise, and stability. Use on supported hardware at your own risk.
 
