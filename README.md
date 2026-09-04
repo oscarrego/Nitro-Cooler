@@ -1,9 +1,9 @@
 # Nitro Cooler
 
 > [!NOTE]
-> **Not a replacement for NitroSense.** Use Acer's official app if it works for you. I built Nitro Cooler because NitroSense silently refused to open on my machine — no error, no window — and after every fix I could find failed, I needed fan and power control somehow.
+> **Not a replacement for NitroSense.** Use Acer's official app if it works for you. I built Nitro Cooler because NitroSense silently refused to open on my machine - no error, no window - and after every fix I could find failed, I needed fan and power control somehow.
 
-Nitro Cooler is a Windows desktop companion for supported Acer Nitro laptops — fan monitoring, fan profiles, power profiles, and persistent settings between launches.
+Nitro Cooler is a Windows desktop companion for supported Acer Nitro laptops - fan monitoring, fan profiles, power profiles, and persistent settings between launches.
 
 > [!WARNING]
 > Not made, endorsed, or supported by Acer. Fan and power controls affect temperature, noise, and stability. Use on supported hardware at your own risk.
@@ -17,14 +17,14 @@ Nitro Cooler is a Windows desktop companion for supported Acer Nitro laptops —
 
 ---
 
-## Download — NitroCooler v1.0
+## Download - NitroCooler v1.0
 
 Get the **[latest release →](../../releases/latest)**
 
 | File | Purpose |
 |---|---|
-| `NitroCooler-v1.0-setup.exe` | ✅ Full installer — installs the app, AeroForge service, PawnIO drivers |
-| `NitroCooler-v1.0-portable.zip` | Portable UI only — still needs the Setup EXE run once on a new machine |
+| `NitroCooler-v1.0-setup.exe` | ✅ Full installer - installs the app, AeroForge service, PawnIO drivers |
+| `NitroCooler-v1.0-portable.zip` | Portable UI only - still needs the Setup EXE run once on a new machine |
 
 **Steps:**
 1. Download `NitroCooler-v1.0-setup.exe`
@@ -45,14 +45,14 @@ Get the **[latest release →](../../releases/latest)**
 | Auto mode | Temperature-curve-based automatic fan control |
 | Max mode | Locks fans to maximum speed |
 | Custom mode | Independent CPU and GPU fan sliders with per-fan Auto toggle |
-| CoolBoost | Smart temp-based control — not just locked-max |
+| CoolBoost | Smart temp-based control - not just locked-max |
 | Fan calibration | Sweep-based RPM calibration tool |
 | History graphs | Temperature and load over time |
 
 ### Power Profiles
 
 - Power Saver · Balanced · Balanced (Acer Optimised) · High-Performance
-- GPU tuning — core clock, memory clock, voltage offset, power limit, temp limit
+- GPU tuning - core clock, memory clock, voltage offset, power limit, temp limit
 - OC presets with named slots
 - Smart charging (battery health mode)
 - AC / Battery view selector
@@ -64,8 +64,8 @@ Get the **[latest release →](../../releases/latest)**
 - Blue light filter
 - Auto display refresh rate on battery
 - Boot logo customisation (Ember, Arc, Slate, custom image)
-- Keyboard-lighting — brightness, 4 zones, zone colours, zone on/off *(saved preferences — firmware write coming later)*
-- Advanced — Sticky Keys, Windows/Menu key lock, backlight timeout
+- Keyboard-lighting - brightness, 4 zones, zone colours, zone on/off *(saved preferences - firmware write coming later)*
+- Advanced - Sticky Keys, Windows/Menu key lock, backlight timeout
 - Global Nitro key shortcut (via hotkey helper)
 - Auto-updater (stable / preview channel)
 - Single-instance enforcement
@@ -135,7 +135,7 @@ flowchart LR
 5. The **Hotkey Helper** binary runs separately and fires the global Nitro key shortcut back to the UI.
 6. Settings are persisted to a local JSON config file by the Rust core.
 
-The UI **cannot** control hardware directly — it always goes through the service.
+The UI **cannot** control hardware directly - it always goes through the service.
 
 ---
 
