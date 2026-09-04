@@ -218,6 +218,46 @@ pub fn apply_telemetry_settings(
     })
 }
 
+pub fn apply_keyboard_lighting(
+    paths: &ServicePaths,
+    request: models::ApplyKeyboardLightingRequest,
+) -> Result<models::AppliedKeyboardLightingSnapshot, Box<dyn std::error::Error + Send + Sync>> {
+    match acer_hid::apply_keyboard_zones_and_brightness(&request.zones, request.brightness_percent) {
+        Ok(detail) => {
+            let _ = write_log_line(&paths.component_log("control-keyboard"), "INFO", &detail);
+            Ok(models::AppliedKeyboardLightingSnapshot { detail })
+        }
+        Err(error) => {
+            let detail = format!("Keyboard lighting apply failed: {error}");
+            let _ = write_log_line(&paths.component_log("control-keyboard"), "ERROR", &detail);
+            Err(error)
+        }
+    }
+}
+
+pub fn apply_backlight_timeout(
+    paths: &ServicePaths,
+    request: models::ApplyBacklightTimeoutRequest,
+) -> Result<models::AppliedBacklightTimeoutSnapshot, Box<dyn std::error::Error + Send + Sync>> {
+    match acer_wmi::apply_backlight_timeout(request.enabled) {
+        Ok(result) => {
+            let detail = format!(
+                "Keyboard backlight timeout {}. WMI result: input=0x{:04X} output={:?}",
+                if request.enabled { "enabled (30s)" } else { "disabled (always on)" },
+                result.input,
+                result.output,
+            );
+            let _ = write_log_line(&paths.component_log("control-keyboard"), "INFO", &detail);
+            Ok(models::AppliedBacklightTimeoutSnapshot { enabled: request.enabled, detail })
+        }
+        Err(error) => {
+            let detail = format!("Backlight timeout apply failed: {error}");
+            let _ = write_log_line(&paths.component_log("control-keyboard"), "ERROR", &detail);
+            Err(error)
+        }
+    }
+}
+
 pub fn apply_custom_fan_curves(
     paths: &ServicePaths,
     request: ApplyCustomFanCurvesRequest,

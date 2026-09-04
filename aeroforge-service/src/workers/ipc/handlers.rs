@@ -170,6 +170,34 @@ pub fn process_request(
                 },
             }
         }
+        PipeRequest::ApplyKeyboardLighting { payload } => {
+            match control::apply_keyboard_lighting(paths, payload) {
+                Ok(applied) => PipeResponse::Ok {
+                    payload: serde_json::to_value(applied).unwrap_or_else(|error| {
+                        json!({
+                            "detail": format!("Applied keyboard lighting but failed to serialize response: {error}")
+                        })
+                    }),
+                },
+                Err(error) => PipeResponse::Error {
+                    message: error.to_string(),
+                },
+            }
+        }
+        PipeRequest::ApplyBacklightTimeout { payload } => {
+            match control::apply_backlight_timeout(paths, payload) {
+                Ok(applied) => PipeResponse::Ok {
+                    payload: serde_json::to_value(applied).unwrap_or_else(|error| {
+                        json!({
+                            "detail": format!("Applied backlight timeout but failed to serialize response: {error}")
+                        })
+                    }),
+                },
+                Err(error) => PipeResponse::Error {
+                    message: error.to_string(),
+                },
+            }
+        }
     }
 }
 

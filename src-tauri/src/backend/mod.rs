@@ -10,4 +10,5 @@ pub mod service_pipe;
 pub mod single_instance;
 pub mod smart_charge;
 pub mod state;
+pub mod sticky_keys;
 pub mod updater;

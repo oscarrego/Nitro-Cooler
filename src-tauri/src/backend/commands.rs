@@ -672,3 +672,61 @@ fn rotate_performance_log_if_needed(path: &PathBuf) -> io::Result<()> {
     let _ = fs::remove_file(&archived_path);
     fs::rename(path, archived_path)
 }
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KeyboardZoneInput {
+    pub enabled: bool,
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplyKeyboardLightingResult {
+    pub detail: String,
+}
+
+#[tauri::command]
+pub fn apply_keyboard_lighting(
+    brightness_percent: u8,
+    zones: Vec<KeyboardZoneInput>,
+) -> Result<ApplyKeyboardLightingResult, String> {
+    let zone_configs: Vec<service_pipe::KeyboardZoneConfig> = zones
+        .into_iter()
+        .map(|z| service_pipe::KeyboardZoneConfig {
+            enabled: z.enabled,
+            r: z.r,
+            g: z.g,
+            b: z.b,
+        })
+        .collect();
+    match service_pipe::apply_keyboard_lighting(brightness_percent, zone_configs) {
+        Ok(result) => Ok(ApplyKeyboardLightingResult { detail: result.detail }),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplyBacklightTimeoutResult {
+    pub enabled: bool,
+    pub detail: String,
+}
+
+#[tauri::command]
+pub fn apply_backlight_timeout(enabled: bool) -> Result<ApplyBacklightTimeoutResult, String> {
+    match service_pipe::apply_backlight_timeout(enabled) {
+        Ok(result) => Ok(ApplyBacklightTimeoutResult {
+            enabled: result.enabled,
+            detail: result.detail,
+        }),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+#[tauri::command]
+pub fn apply_sticky_keys(enabled: bool) -> Result<(), String> {
+    super::sticky_keys::apply_sticky_keys(enabled)
+}

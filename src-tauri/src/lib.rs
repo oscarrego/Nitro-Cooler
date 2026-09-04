@@ -49,7 +49,10 @@ pub fn run() {
             commands::apply_custom_fan_curves,
             commands::start_fan_speed_calibration,
             commands::cancel_fan_speed_calibration,
-            commands::apply_boot_logo
+            commands::apply_boot_logo,
+            commands::apply_keyboard_lighting,
+            commands::apply_backlight_timeout,
+            commands::apply_sticky_keys
         ])
         .setup(move |app| {
             let config_root = app.path().app_config_dir()?;

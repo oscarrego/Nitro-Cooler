@@ -494,3 +494,32 @@ export async function applyBootLogo(
     selectedBootArt,
   })
 }
+
+export interface KeyboardZoneConfig {
+  enabled: boolean
+  r: number
+  g: number
+  b: number
+}
+
+export interface ApplyKeyboardLightingResult {
+  detail: string
+}
+
+export async function applyKeyboardLighting(
+  brightnessPercent: number,
+  zones: KeyboardZoneConfig[],
+) {
+  return invoke<ApplyKeyboardLightingResult>('apply_keyboard_lighting', {
+    brightnessPercent,
+    zones,
+  })
+}
+
+export async function applyBacklightTimeout(enabled: boolean) {
+  return invoke<{ enabled: boolean; detail: string }>('apply_backlight_timeout', { enabled })
+}
+
+export async function applyStickyKeys(enabled: boolean) {
+  return invoke<void>('apply_sticky_keys', { enabled })
+}

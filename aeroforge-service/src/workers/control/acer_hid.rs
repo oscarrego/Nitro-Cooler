@@ -155,6 +155,193 @@ fn build_request(prefix: [u8; 9]) -> [u8; REPORT_LEN] {
     request
 }
 
+// ── Keyboard LED (4-zone RGB) ────────────────────────────────────────────────
+//
+// Protocol reverse-engineered from the OpenRGB community for Acer Nitro
+// AN515-series laptops (VID 0x1025).  Each zone uses a 16-byte HID output
+// report with Report ID 0x5A:
+//
+//   Byte  0  : Report ID = 0x5A
+//   Byte  1  : 0xB3   (set-zone command)
+//   Byte  2  : zone index 1-4
+//   Byte  3  : 0x00
+//   Bytes 4-6: R, G, B
+//   Bytes 7-15: 0x00  (padding)
+//
+// Brightness command:
+//   Byte  0  : 0x5A
+//   Byte  1  : 0xB4   (brightness command)
+//   Byte  2  : brightness 0-100
+//   Bytes 3-15: 0x00
+//
+// Zone disable is achieved by writing R=G=B=0 for that zone.
+
+const LED_REPORT_ID: u8 = 0x5A;
+const LED_REPORT_LEN: usize = 16;
+const LED_DEVICE_USAGE_PAGE: &str = "hid#1025174b&col02#";
+const LED_DEVICE_FALLBACK_MARKER: &str = "hid#1025174b";
+
+pub fn apply_keyboard_zones_and_brightness(
+    zones: &[super::models::KeyboardZoneState],
+    brightness_percent: u8,
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    let device_path = find_led_device_path()?;
+
+    let handle = HidHandle(open_hid_handle(&device_path, GENERIC_READ | GENERIC_WRITE)?);
+
+    // Write brightness
+    let brightness_byte = brightness_percent.clamp(0, 100);
+    let mut brightness_report = [0u8; LED_REPORT_LEN];
+    brightness_report[0] = LED_REPORT_ID;
+    brightness_report[1] = 0xB4;
+    brightness_report[2] = brightness_byte;
+    let _ = unsafe {
+        HidD_SetFeature(handle.0, brightness_report.as_ptr() as *const _, LED_REPORT_LEN as u32)
+    };
+
+    // Write each zone
+    for (i, zone) in zones.iter().enumerate().take(4) {
+        let zone_index = (i + 1) as u8;
+        let (r, g, b) = if zone.enabled {
+            (zone.r, zone.g, zone.b)
+        } else {
+            (0, 0, 0)
+        };
+
+        let mut zone_report = [0u8; LED_REPORT_LEN];
+        zone_report[0] = LED_REPORT_ID;
+        zone_report[1] = 0xB3;
+        zone_report[2] = zone_index;
+        zone_report[3] = 0x00;
+        zone_report[4] = r;
+        zone_report[5] = g;
+        zone_report[6] = b;
+
+        let ok = unsafe {
+            HidD_SetFeature(handle.0, zone_report.as_ptr() as *const _, LED_REPORT_LEN as u32)
+        };
+        if !ok {
+            let err = unsafe { GetLastError() };
+            return Err(format!(
+                "HidD_SetFeature failed for keyboard zone {zone_index}: OS error {err}"
+            ).into());
+        }
+    }
+
+    Ok(format!(
+        "Keyboard lighting applied: brightness {}%, {} zones updated.",
+        brightness_percent,
+        zones.len().min(4)
+    ))
+}
+
+fn find_led_device_path() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    let mut guid = unsafe { zeroed() };
+    unsafe { HidD_GetHidGuid(&mut guid) };
+
+    let info_set = unsafe {
+        SetupDiGetClassDevsW(&guid, null(), null_mut(), DIGCF_PRESENT | DIGCF_DEVICEINTERFACE)
+    };
+    if info_set == INVALID_HANDLE_VALUE as isize {
+        return Err(std::io::Error::last_os_error().into());
+    }
+
+    let info_set = DeviceInfoSet(info_set);
+    let mut index = 0u32;
+
+    // Try specific col02 path first, then fall back to any 174b device
+    let mut fallback_path: Option<String> = None;
+
+    loop {
+        let mut interface_data = SP_DEVICE_INTERFACE_DATA {
+            cbSize: size_of::<SP_DEVICE_INTERFACE_DATA>() as u32,
+            ..unsafe { zeroed() }
+        };
+
+        let ok = unsafe {
+            SetupDiEnumDeviceInterfaces(info_set.0, null_mut(), &guid, index, &mut interface_data)
+        };
+        if ok == 0 {
+            let error = unsafe { GetLastError() };
+            if error == ERROR_NO_MORE_ITEMS {
+                break;
+            }
+            return Err(std::io::Error::from_raw_os_error(error as i32).into());
+        }
+
+        if let Ok(Some(path)) = try_led_device_path(info_set.0, &interface_data) {
+            let lower = path.to_ascii_lowercase();
+            if lower.contains(LED_DEVICE_USAGE_PAGE) {
+                return Ok(path);
+            }
+            if lower.contains(LED_DEVICE_FALLBACK_MARKER) && fallback_path.is_none() {
+                fallback_path = Some(path);
+            }
+        }
+
+        index += 1;
+    }
+
+    fallback_path.ok_or_else(|| {
+        "Acer Nitro keyboard LED HID device was not found (VID 0x1025, col02 or 174b path)."
+            .into()
+    })
+}
+
+fn try_led_device_path(
+    info_set: isize,
+    interface_data: &SP_DEVICE_INTERFACE_DATA,
+) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
+    let mut required_size = 0u32;
+    unsafe {
+        SetupDiGetDeviceInterfaceDetailW(info_set, interface_data, null_mut(), 0, &mut required_size, null_mut());
+    }
+    let error = unsafe { GetLastError() };
+    if required_size == 0 || error != ERROR_INSUFFICIENT_BUFFER {
+        return Ok(None);
+    }
+
+    let mut detail_buffer = vec![0u8; required_size as usize];
+    let detail_ptr = detail_buffer.as_mut_ptr() as *mut SP_DEVICE_INTERFACE_DETAIL_DATA_W;
+    unsafe {
+        (*detail_ptr).cbSize = size_of::<SP_DEVICE_INTERFACE_DETAIL_DATA_W>() as u32;
+    }
+
+    let ok = unsafe {
+        SetupDiGetDeviceInterfaceDetailW(
+            info_set, interface_data, detail_ptr,
+            required_size, &mut required_size, null_mut(),
+        )
+    };
+    if ok == 0 {
+        return Ok(None);
+    }
+
+    let path = unsafe {
+        read_null_terminated_wstr(std::ptr::addr_of!((*detail_ptr).DevicePath) as *const u16)
+    };
+    let lower = path.to_ascii_lowercase();
+    if !lower.contains("hid#1025") {
+        return Ok(None);
+    }
+
+    // Verify it is an Acer device
+    let handle = open_hid_handle(&path, 0)?;
+    let mut attributes = HIDD_ATTRIBUTES {
+        Size: size_of::<HIDD_ATTRIBUTES>() as u32,
+        ..unsafe { zeroed() }
+    };
+    let ok = unsafe { HidD_GetAttributes(handle, &mut attributes) };
+    unsafe { CloseHandle(handle) };
+
+    if !ok || attributes.VendorID != ACER_VENDOR_ID {
+        return Ok(None);
+    }
+
+    Ok(Some(path))
+}
+
+
 fn find_system_usage_device_path() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     let mut guid = unsafe { zeroed() };
     unsafe {

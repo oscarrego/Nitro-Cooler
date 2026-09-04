@@ -68,6 +68,15 @@ pub const MIN_MANUAL_FAN_PERCENT: u8 = 2;
 
 pub const MISC_SETTING_SUPPORTED_PROFILES: u8 = 0x0A;
 pub const MISC_SETTING_PLATFORM_PROFILE: u8 = 0x0B;
+// Keyboard backlight auto-off timeout: 0 = always on, 1 = off after 30 seconds
+pub const MISC_SETTING_BACKLIGHT_TIMEOUT: u8 = 0x05;
+
+pub fn apply_backlight_timeout(
+    enabled: bool,
+) -> Result<AcerWmiMethodResult, Box<dyn std::error::Error + Send + Sync>> {
+    let value: u8 = if enabled { 1 } else { 0 };
+    apply_gaming_misc_setting(MISC_SETTING_BACKLIGHT_TIMEOUT, value)
+}
 
 pub fn clamp_manual_fan_percent(percent: u8) -> u8 {
     if percent == 0 {

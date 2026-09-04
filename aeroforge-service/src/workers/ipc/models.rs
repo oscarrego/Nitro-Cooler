@@ -6,6 +6,7 @@ use crate::workers::control::{
     ApplyGpuTuningRequest, ApplyPowerProfileRequest, ApplySmartChargeRequest,
     ApplyTelemetrySettingsRequest,
 };
+use crate::workers::control::models::{ApplyKeyboardLightingRequest, ApplyBacklightTimeoutRequest};
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
@@ -37,6 +38,12 @@ pub enum PipeRequest {
     },
     ApplyTelemetrySettings {
         payload: ApplyTelemetrySettingsRequest,
+    },
+    ApplyKeyboardLighting {
+        payload: ApplyKeyboardLightingRequest,
+    },
+    ApplyBacklightTimeout {
+        payload: ApplyBacklightTimeoutRequest,
     },
 }
 

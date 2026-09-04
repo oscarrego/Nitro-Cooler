@@ -69,6 +69,12 @@ enum PipeRequest {
     ApplyTelemetrySettings {
         payload: ApplyTelemetrySettingsRequest,
     },
+    ApplyKeyboardLighting {
+        payload: ApplyKeyboardLightingRequest,
+    },
+    ApplyBacklightTimeout {
+        payload: ApplyBacklightTimeoutRequest,
+    },
 }
 
 #[derive(Debug, Deserialize)]
@@ -122,6 +128,28 @@ struct ApplySmartChargeRequest {
 #[serde(rename_all = "camelCase")]
 struct ApplyTelemetrySettingsRequest {
     nvidia_telemetry_enabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KeyboardZoneConfig {
+    pub enabled: bool,
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ApplyKeyboardLightingRequest {
+    brightness_percent: u8,
+    zones: Vec<KeyboardZoneConfig>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ApplyBacklightTimeoutRequest {
+    enabled: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -411,6 +439,41 @@ pub fn apply_telemetry_settings(
     Ok(serde_json::from_value::<AppliedTelemetrySettingsPayload>(
         payload,
     )?)
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppliedKeyboardLightingPayload {
+    pub detail: String,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppliedBacklightTimeoutPayload {
+    pub enabled: bool,
+    pub detail: String,
+}
+
+pub fn apply_keyboard_lighting(
+    brightness_percent: u8,
+    zones: Vec<KeyboardZoneConfig>,
+) -> Result<AppliedKeyboardLightingPayload, Box<dyn std::error::Error + Send + Sync>> {
+    let payload = request(PipeRequest::ApplyKeyboardLighting {
+        payload: ApplyKeyboardLightingRequest {
+            brightness_percent,
+            zones,
+        },
+    })?;
+    Ok(serde_json::from_value::<AppliedKeyboardLightingPayload>(payload)?)
+}
+
+pub fn apply_backlight_timeout(
+    enabled: bool,
+) -> Result<AppliedBacklightTimeoutPayload, Box<dyn std::error::Error + Send + Sync>> {
+    let payload = request(PipeRequest::ApplyBacklightTimeout {
+        payload: ApplyBacklightTimeoutRequest { enabled },
+    })?;
+    Ok(serde_json::from_value::<AppliedBacklightTimeoutPayload>(payload)?)
 }
 
 fn request(command: PipeRequest) -> Result<Value, Box<dyn std::error::Error + Send + Sync>> {

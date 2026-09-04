@@ -129,6 +129,41 @@ pub struct ApplyTelemetrySettingsRequest {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct KeyboardZoneState {
+    pub enabled: bool,
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplyKeyboardLightingRequest {
+    pub brightness_percent: u8,
+    pub zones: Vec<KeyboardZoneState>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppliedKeyboardLightingSnapshot {
+    pub detail: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApplyBacklightTimeoutRequest {
+    pub enabled: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppliedBacklightTimeoutSnapshot {
+    pub enabled: bool,
+    pub detail: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct AppliedPowerProfileSnapshot {
     pub profile_id: PowerProfileId,
     pub processor_state: ProcessorStateSettings,

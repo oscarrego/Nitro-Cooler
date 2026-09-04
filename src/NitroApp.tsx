@@ -12,6 +12,9 @@ import {
   applyCustomFanCurves,
   applyFanProfile,
   applyPowerProfile,
+  applyKeyboardLighting,
+  applyBacklightTimeout,
+  applyStickyKeys,
   getBackendBootstrap,
   getBackendPollSnapshot,
   saveControlSnapshot,
@@ -350,7 +353,6 @@ export default function NitroApp() {
   const [keyboardBrightness, setKeyboardBrightness] = useState(75)
   const [keyboardZones, setKeyboardZones] = useState([true, true, true, true])
   const [keyboardColors, setKeyboardColors] = useState(['#ff3b00', '#ff3b00', '#ff3b00', '#ff3b00'])
-  const [statusMsg,    setStatusMsg]    = useState('')
 
   // Backend state
   const [liveTel,  setLiveTel]  = useState<TelemetrySnapshot | null>(null)
@@ -566,8 +568,7 @@ export default function NitroApp() {
           svcRef.current = bs.service.connected
           applySnap(bs.controls, bs.liveControls)
           if (bs.telemetry) serial(telSnap, bs.telemetry, setLiveTel)
-          setStatusMsg(bs.service.connected ? 'Service connected.' : 'Service not connected.')
-        } catch (e) { setStatusMsg(`Init failed: ${errMsg(e)}`) }
+        } catch (e) {}`) }
       })()
 
       // Poll live data
@@ -603,7 +604,6 @@ export default function NitroApp() {
       const initGL = Array.from({ length: GLEN }, (_, i) => 22 + Math.sin(i * 0.09) * 20 + Math.random() * 8)
       setCpuTH(initCT); setCpuLH(initCL); setGpuTH(initGT); setGpuLH(initGL)
       setCpuMin(36); setCpuMax(91); setGpuMin(35); setGpuMax(74)
-      setStatusMsg('Preview mode — service not connected.')
 
       const tid = window.setInterval(() => {
         f++
@@ -653,13 +653,12 @@ export default function NitroApp() {
   // ── Fan profile apply ─────────────────────────────────────────────────────
   async function handleFan(id: FanProfile, overrideMsg?: string, personalSettings?: SnapshotOverrides['personalSettings']) {
     setFanProfile(id)
-    setStatusMsg(overrideMsg ?? `Applying fan mode: ${id}…`)
 
     // Always persist to disk first (works offline too)
     await persist({ activeFanProfile: id, personalSettings })
 
     if (!svcRef.current) {
-      setStatusMsg(`Fan mode ${id} saved (service not connected).`)
+.`)
       return
     }
     if (fanRef.current) { qFan.current = id; return }
@@ -671,10 +670,9 @@ export default function NitroApp() {
         : applyFanProfile(id)
       const res = await withTo(req, FAN_TO, `fan ${id}`)
       applySnap(res.controls)
-      setStatusMsg(res.detail)
     } catch (e) {
       setFanProfile(fanProfile)
-      setStatusMsg(`Fan apply failed: ${errMsg(e)}`)
+}`)
     } finally {
       fanRef.current = false
       ctlN.current = Math.max(0, ctlN.current - 1)
@@ -695,7 +693,7 @@ export default function NitroApp() {
     await persist({ activePowerProfile: id })
 
     if (!svcRef.current) {
-      setStatusMsg(`Power plan ${id} saved (service not connected).`)
+.`)
       return
     }
     if (pwrRef.current) { qPwr.current = id; return }
@@ -704,10 +702,9 @@ export default function NitroApp() {
       await waitPaint()
       const res = await applyPowerProfile(id, ps, null, pCtrl)
       applySnap(res)
-      setStatusMsg(`Power plan applied: ${id}`)
     } catch (e) {
       setPowerProfile(powerProfile)
-      setStatusMsg(`Power apply failed: ${errMsg(e)}`)
+}`)
     } finally {
       pwrRef.current = false
       ctlN.current = Math.max(0, ctlN.current - 1)
@@ -727,8 +724,10 @@ export default function NitroApp() {
   async function applyCustomFanSettings(next: { cpuAuto?: boolean; gpuAuto?: boolean; cpuSpeed?: number; gpuSpeed?: number }) {
     const nextCpuAuto = next.cpuAuto ?? cpuAuto
     const nextGpuAuto = next.gpuAuto ?? gpuAuto
-    const nextCpuSpeed = clamp(next.cpuSpeed ?? cpuSlider, 0, 100)
-    const nextGpuSpeed = clamp(next.gpuSpeed ?? gpuSlider, 0, 100)
+    // Snap to nearest 10% increment
+    const snap10 = (v: number) => Math.round(clamp(v, 0, 100) / 10) * 10
+    const nextCpuSpeed = snap10(next.cpuSpeed ?? cpuSlider)
+    const nextGpuSpeed = snap10(next.gpuSpeed ?? gpuSlider)
     const curves = buildCustomCurves(nextCpuAuto, nextGpuAuto, nextCpuSpeed, nextGpuSpeed)
 
     setFanProfile('custom')
@@ -746,16 +745,15 @@ export default function NitroApp() {
     })
 
     if (!svcRef.current) {
-      setStatusMsg('Custom fan settings saved (service not connected).')
+.')
       return
     }
 
     try {
       const result = await withTo(applyCustomFanCurves(toCurves(curves)), FAN_TO, 'custom fan settings')
       applySnap(result.controls)
-      setStatusMsg(result.detail)
     } catch (error) {
-      setStatusMsg(`Custom fan apply failed: ${errMsg(error)}`)
+}`)
     }
   }
 
@@ -768,6 +766,13 @@ export default function NitroApp() {
 
   async function saveAdvancedSetting(setting: SnapshotOverrides['personalSettings']) {
     await persist({ personalSettings: setting })
+    // Wire hardware backends for specific settings
+    if (setting?.stickyKeysEnabled !== undefined) {
+      void applyStickyKeys(setting.stickyKeysEnabled).catch(() => {/* ignore if service down */})
+    }
+    if (setting?.keyboardBacklightTimeoutEnabled !== undefined) {
+      void applyBacklightTimeout(setting.keyboardBacklightTimeoutEnabled).catch(() => {/* ignore if service down */})
+    }
   }
 
   function saveKeyboardLighting(next: { dynamic?: boolean; brightness?: number; zones?: boolean[]; colors?: string[] }) {
@@ -785,6 +790,15 @@ export default function NitroApp() {
       keyboardZone1Enabled: zones[0], keyboardZone2Enabled: zones[1], keyboardZone3Enabled: zones[2], keyboardZone4Enabled: zones[3],
       keyboardZone1Color: colors[0], keyboardZone2Color: colors[1], keyboardZone3Color: colors[2], keyboardZone4Color: colors[3],
     }})
+    // Also apply to hardware via service
+    const zoneConfigs = zones.map((enabled, i) => {
+      const hex = colors[i] ?? '#ff3b00'
+      const r = parseInt(hex.slice(1, 3), 16) || 0
+      const g = parseInt(hex.slice(3, 5), 16) || 0
+      const b = parseInt(hex.slice(5, 7), 16) || 0
+      return { enabled, r, g, b }
+    })
+    void applyKeyboardLighting(brightness, zoneConfigs).catch(() => {/* service may not be connected */})
   }
 
   // Window controls
@@ -794,7 +808,7 @@ export default function NitroApp() {
     } catch (error) {
       // The browser preview has no native window. In the packaged Tauri app the
       // API is available even when the legacy __TAURI_INTERNALS__ global is not.
-      if (isTauri()) setStatusMsg(`Could not minimize: ${errMsg(error)}`)
+      if (isTauri())}`)
     }
   }
 
@@ -803,7 +817,7 @@ export default function NitroApp() {
       await persist()
       await getCurrentWindow().close()
     } catch (error) {
-      if (isTauri()) setStatusMsg(`Could not close: ${errMsg(error)}`)
+      if (isTauri())}`)
     }
   }
 
@@ -824,11 +838,6 @@ export default function NitroApp() {
         </div>
 
         <div className="nc-titlebar__right">
-          {/* GeForce Experience */}
-          <div className="nc-gfe" aria-label="GeForce Experience branding">
-            <div className="nc-gfe__dot">G</div>
-            <span className="nc-gfe__txt">GEFORCE<br/>EXPERIENCE</span>
-          </div>
           {/* Keyboard */}
           <button className={`nc-ibtn${lightingOpen ? ' active' : ''}`} title="Keyboard lighting" onClick={() => setLightingOpen(open => !open)} aria-expanded={lightingOpen}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
@@ -993,14 +1002,14 @@ export default function NitroApp() {
               <div className="nc-crow">
                 <span className="nc-cname">CPU</span>
                 <button className="nc-pm" disabled={cpuAuto}
-                  onClick={() => void applyCustomFanSettings({ cpuSpeed: cpuSlider - 5 })}>−</button>
-                <input type="range" min={0} max={100} value={cpuSlider}
+                  onClick={() => void applyCustomFanSettings({ cpuSpeed: cpuSlider - 10 })}>−</button>
+                <input type="range" min={0} max={100} step={10} value={cpuSlider}
                   className="nc-slider" disabled={cpuAuto}
-                  onChange={e => setCpuSlider(+e.target.value)}
+                  onChange={e => setCpuSlider(Math.round(+e.target.value / 10) * 10)}
                   onPointerUp={e => void applyCustomFanSettings({ cpuSpeed: +(e.currentTarget as HTMLInputElement).value })}
                   onKeyUp={e => void applyCustomFanSettings({ cpuSpeed: +(e.currentTarget as HTMLInputElement).value })} />
                 <button className="nc-pm" disabled={cpuAuto}
-                  onClick={() => void applyCustomFanSettings({ cpuSpeed: cpuSlider + 5 })}>+</button>
+                  onClick={() => void applyCustomFanSettings({ cpuSpeed: cpuSlider + 10 })}>+</button>
                 <span className="nc-pct">{cpuSlider}%</span>
                 <button className={`nc-autobtn${cpuAuto ? ' on' : ''}`} onClick={() => void applyCustomFanSettings({ cpuAuto: !cpuAuto })}>Auto</button>
               </div>
@@ -1008,14 +1017,14 @@ export default function NitroApp() {
               <div className="nc-crow">
                 <span className="nc-cname">GPU</span>
                 <button className="nc-pm" disabled={gpuAuto}
-                  onClick={() => void applyCustomFanSettings({ gpuSpeed: gpuSlider - 5 })}>−</button>
-                <input type="range" min={0} max={100} value={gpuSlider}
+                  onClick={() => void applyCustomFanSettings({ gpuSpeed: gpuSlider - 10 })}>−</button>
+                <input type="range" min={0} max={100} step={10} value={gpuSlider}
                   className="nc-slider" disabled={gpuAuto}
-                  onChange={e => setGpuSlider(+e.target.value)}
+                  onChange={e => setGpuSlider(Math.round(+e.target.value / 10) * 10)}
                   onPointerUp={e => void applyCustomFanSettings({ gpuSpeed: +(e.currentTarget as HTMLInputElement).value })}
                   onKeyUp={e => void applyCustomFanSettings({ gpuSpeed: +(e.currentTarget as HTMLInputElement).value })} />
                 <button className="nc-pm" disabled={gpuAuto}
-                  onClick={() => void applyCustomFanSettings({ gpuSpeed: gpuSlider + 5 })}>+</button>
+                  onClick={() => void applyCustomFanSettings({ gpuSpeed: gpuSlider + 10 })}>+</button>
                 <span className="nc-pct">{gpuSlider}%</span>
                 <button className={`nc-autobtn${gpuAuto ? ' on' : ''}`} onClick={() => void applyCustomFanSettings({ gpuAuto: !gpuAuto })}>Auto</button>
               </div>
@@ -1049,7 +1058,6 @@ export default function NitroApp() {
                 ))}
               </div>
             </div>
-            {statusMsg && <div className="nc-status">{statusMsg}</div>}
           </div>
 
           {/* Monitoring */}
