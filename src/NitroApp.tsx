@@ -55,7 +55,6 @@ const DEF_CURVES: Curves = {
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 const isTauri = () => Boolean((window as any).__TAURI_INTERNALS__)
 const clamp   = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
-const errMsg  = (e: unknown) => e instanceof Error ? e.message : String(e)
 
 function waitPaint() {
   return new Promise<void>(res => {
@@ -568,7 +567,9 @@ export default function NitroApp() {
           svcRef.current = bs.service.connected
           applySnap(bs.controls, bs.liveControls)
           if (bs.telemetry) serial(telSnap, bs.telemetry, setLiveTel)
-        } catch (e) {}`) }
+        } catch {
+          // Ignore when running in browser preview
+        }
       })()
 
       // Poll live data
@@ -596,6 +597,10 @@ export default function NitroApp() {
 
     } else {
       // ── Browser preview simulation ──────────────────────────────────────
+      document.documentElement.style.backgroundColor = '#0c0d0e'
+      document.body.style.backgroundColor = '#0c0d0e'
+      document.body.style.overflow = 'auto'
+
       let f = 0
       const bc = 47, bg = 45
       const initCT = Array.from({ length: GLEN }, (_, i) => bc + Math.sin(i * 0.15) * 10 + Math.random() * 5)
@@ -651,14 +656,13 @@ export default function NitroApp() {
   }, [persist])
 
   // ── Fan profile apply ─────────────────────────────────────────────────────
-  async function handleFan(id: FanProfile, overrideMsg?: string, personalSettings?: SnapshotOverrides['personalSettings']) {
+  async function handleFan(id: FanProfile, _overrideMsg?: string, personalSettings?: SnapshotOverrides['personalSettings']) {
     setFanProfile(id)
 
     // Always persist to disk first (works offline too)
     await persist({ activeFanProfile: id, personalSettings })
 
     if (!svcRef.current) {
-.`)
       return
     }
     if (fanRef.current) { qFan.current = id; return }
@@ -670,9 +674,8 @@ export default function NitroApp() {
         : applyFanProfile(id)
       const res = await withTo(req, FAN_TO, `fan ${id}`)
       applySnap(res.controls)
-    } catch (e) {
+    } catch {
       setFanProfile(fanProfile)
-}`)
     } finally {
       fanRef.current = false
       ctlN.current = Math.max(0, ctlN.current - 1)
@@ -693,7 +696,6 @@ export default function NitroApp() {
     await persist({ activePowerProfile: id })
 
     if (!svcRef.current) {
-.`)
       return
     }
     if (pwrRef.current) { qPwr.current = id; return }
@@ -702,9 +704,8 @@ export default function NitroApp() {
       await waitPaint()
       const res = await applyPowerProfile(id, ps, null, pCtrl)
       applySnap(res)
-    } catch (e) {
+    } catch {
       setPowerProfile(powerProfile)
-}`)
     } finally {
       pwrRef.current = false
       ctlN.current = Math.max(0, ctlN.current - 1)
@@ -745,15 +746,14 @@ export default function NitroApp() {
     })
 
     if (!svcRef.current) {
-.')
       return
     }
 
     try {
       const result = await withTo(applyCustomFanCurves(toCurves(curves)), FAN_TO, 'custom fan settings')
       applySnap(result.controls)
-    } catch (error) {
-}`)
+    } catch {
+      /* ignore */
     }
   }
 
@@ -805,10 +805,8 @@ export default function NitroApp() {
   const doMinimize = async () => {
     try {
       await getCurrentWindow().minimize()
-    } catch (error) {
-      // The browser preview has no native window. In the packaged Tauri app the
-      // API is available even when the legacy __TAURI_INTERNALS__ global is not.
-      if (isTauri())}`)
+    } catch {
+      // The browser preview has no native window.
     }
   }
 
@@ -816,8 +814,8 @@ export default function NitroApp() {
     try {
       await persist()
       await getCurrentWindow().close()
-    } catch (error) {
-      if (isTauri())}`)
+    } catch {
+      // The browser preview has no native window.
     }
   }
 

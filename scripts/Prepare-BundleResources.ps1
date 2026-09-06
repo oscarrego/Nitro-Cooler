@@ -9,6 +9,7 @@ $installerServiceScript = Join-Path $projectRoot 'src-tauri\resources\Install-Ae
 $pawnIoSetup = Join-Path $projectRoot 'third_party\pawnio\PawnIO_setup.exe'
 $intelMsrModule = Join-Path $projectRoot 'third_party\pawnio-modules\IntelMSR.bin'
 $webView2Loader = Join-Path $projectRoot 'src-tauri\target\release\WebView2Loader.dll'
+$webView2LoaderSource = Join-Path $projectRoot 'src-tauri\target\release\build\webview2-com-sys-f11524e41924e515\out\x64\WebView2Loader.dll'
 
 function Resolve-CargoPath {
   $fallbacks = @(
@@ -31,6 +32,21 @@ function Resolve-CargoPath {
 }
 
 $cargoPath = Resolve-CargoPath
+
+# Tauri validates declared bundle resources while compiling helper binaries. Stage the
+# architecture-matched WebView2 loader before that validation so a clean checkout can build.
+if (-not (Test-Path -LiteralPath $webView2Loader)) {
+  if (-not (Test-Path -LiteralPath $webView2LoaderSource)) {
+    throw "WebView2 loader source missing: $webView2LoaderSource"
+  }
+  Copy-Item -LiteralPath $webView2LoaderSource -Destination $webView2Loader -Force
+}
+
+# The helper is itself a declared bundle resource. A placeholder lets Tauri's build
+# script validate the resource while Cargo compiles the real helper executable.
+if (-not (Test-Path -LiteralPath $helperExe)) {
+  New-Item -ItemType File -Path $helperExe -Force | Out-Null
+}
 
 & $cargoPath build --release --manifest-path $serviceManifest
 if ($LASTEXITCODE -ne 0) {

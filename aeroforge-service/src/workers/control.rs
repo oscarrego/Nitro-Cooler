@@ -29,6 +29,7 @@ pub use models::{
     AppliedBootLogoSnapshot, AppliedFanControlSnapshot, AppliedGpuTuningSnapshot,
     AppliedPowerProfileSnapshot, AppliedSmartChargeSnapshot, AppliedTelemetrySettingsSnapshot,
     ApplyBootLogoRequest, ApplyCustomFanCurvesRequest, ApplyFanProfileRequest,
+    ApplyBacklightTimeoutRequest, ApplyKeyboardLightingRequest,
     ApplyGpuTuningRequest, ApplyPowerProfileRequest, ApplySmartChargeRequest,
     ApplyTelemetrySettingsRequest, FanProfileId, FanSpeedCalibrationSnapshot,
 };
