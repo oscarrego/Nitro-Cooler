@@ -265,10 +265,8 @@ html, body, #root {
   transition: height 0.18s ease;
 }
 
-.nc-fan.expanded { height: 246px; }
-.nc-fan.expanded .nc-modes { padding-bottom: 78px; }
-.nc-fan.expanded .nc-vdiv { margin-bottom: 76px; }
-.nc-fan.expanded .nc-dials { padding-bottom: 68px; }
+
+
 
 /* CoolBoost */
 .nc-cb {
@@ -392,39 +390,47 @@ html, body, #root {
 }
 .nc-runit { font-size: 10px; color: #888; letter-spacing: 0.1em; margin-top: 3px; }
 
-/* ── Custom slider section ──────────────────────────────────── */
-.nc-custom {
-  position: absolute;
-  bottom: 8px; left: 190px; right: 16px;
-  background: rgba(0,0,0,0.25);
-  border-top: 1px solid rgba(255,255,255,0.06);
-  padding: 6px 10px;
+/* ── Inline fan controls (custom mode) ─────────────────────── */
+.nc-inline-ctrl {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 8px;
+  min-width: 140px;
+  max-width: 190px;
+  padding: 0 10px;
+  flex-shrink: 0;
+}
+
+.nc-slider-row {
+  display: flex;
+  align-items: center;
   gap: 6px;
-  border-radius: 4px;
+  width: 100%;
 }
 
 .nc-crow {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
+  height: 24px;
 }
 
 .nc-cname {
   font-size: 11px;
   color: var(--text-mid);
-  min-width: 30px;
   font-weight: 500;
+  letter-spacing: 0.04em;
 }
 
 .nc-pm {
-  width: 22px; height: 22px;
-  border: 1px solid rgba(255,255,255,0.15);
-  background: rgba(255,255,255,0.05);
+  width: 16px; height: 16px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.04);
   color: var(--text-mid);
-  border-radius: 3px;
-  font-size: 16px;
+  border-radius: 2px;
+  font-size: 12px;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer;
   flex-shrink: 0;
@@ -438,44 +444,51 @@ html, body, #root {
 .nc-slider {
   flex: 1;
   -webkit-appearance: none;
-  height: 3px;
-  border-radius: 2px;
-  background: #333;
+  height: 2px;
+  border-radius: 1px;
+  background: #3a3a3a;
   outline: none;
   cursor: pointer;
+  margin: 0;
+  min-width: 0;
 }
 .nc-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 14px; height: 14px;
+  width: 11px; height: 11px;
   border-radius: 50%;
   background: var(--red);
   cursor: pointer;
-  box-shadow: 0 0 6px var(--red-glow);
+  box-shadow: 0 0 5px var(--red-glow);
   transition: transform 0.1s;
 }
-.nc-slider::-webkit-slider-thumb:hover { transform: scale(1.2); }
+.nc-slider::-webkit-slider-thumb:hover { transform: scale(1.25); }
 .nc-slider:disabled { opacity: .3; cursor: default; }
-.nc-slider:disabled::-webkit-slider-thumb { background: #777; box-shadow: none; cursor: default; }
+.nc-slider:disabled::-webkit-slider-thumb { background: #666; box-shadow: none; cursor: default; }
 
 .nc-pct {
   font-size: 11px;
   color: var(--red);
-  min-width: 32px;
+  min-width: 30px;
   text-align: right;
   font-weight: 600;
 }
 
 .nc-autobtn {
-  font-size: 10px; padding: 3px 10px;
-  border: 1px solid rgba(232,74,26,0.5);
+  font-size: 10px; padding: 2px 12px;
+  border: 1px solid rgba(232,74,26,0.45);
   background: transparent; color: var(--red);
-  border-radius: 3px; cursor: pointer;
+  border-radius: 11px;
+  cursor: pointer;
   font-family: inherit; font-weight: 500;
-  transition: background 0.12s;
+  transition: background 0.12s, border-color 0.12s;
   flex-shrink: 0;
+  align-self: flex-start;
+  letter-spacing: 0.03em;
 }
 .nc-autobtn:hover { background: rgba(232,74,26,0.12); }
 .nc-autobtn.on { background: var(--red); color: #fff; border-color: var(--red); }
+
+
 
 /* ── Bottom row ─────────────────────────────────────────────── */
 .nc-bottom {

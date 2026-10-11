@@ -926,7 +926,7 @@ export default function NitroApp() {
       <div className="nc-body">
 
         {/* ── FAN CONTROL PANEL ───────────────────────────────────────────── */}
-        <div className={`nc-fan${isCustom ? ' expanded' : ''}`}>
+        <div className="nc-fan">
           <span className="nc-tab">Fan Control</span>
 
           {/* CoolBoost toggle */}
@@ -962,9 +962,35 @@ export default function NitroApp() {
 
           {/* Fan dials */}
           <div className="nc-dials">
-            {/* CPU */}
+            {/* CPU group */}
             <div className="nc-dgrp">
-              <span className="nc-dlabel left">CPU</span>
+              {isCustom ? (
+                <div className="nc-inline-ctrl">
+                  <span className="nc-cname">CPU</span>
+                  <div className="nc-slider-row">
+                    <button className="nc-pm" disabled={cpuAuto}
+                      onClick={() => void applyCustomFanSettings({ cpuSpeed: cpuSlider - 10 })}>−</button>
+                    <input
+                      type="range" min={0} max={100} step={10} value={cpuSlider}
+                      className="nc-slider" disabled={cpuAuto}
+                      style={cpuAuto ? undefined : {
+                        background: `linear-gradient(to right,var(--red) 0%,var(--red) ${cpuSlider}%,#3a3a3a ${cpuSlider}%,#3a3a3a 100%)`
+                      }}
+                      onChange={e => setCpuSlider(Math.round(+e.target.value / 10) * 10)}
+                      onPointerUp={e => void applyCustomFanSettings({ cpuSpeed: +(e.currentTarget as HTMLInputElement).value })}
+                      onKeyUp={e => void applyCustomFanSettings({ cpuSpeed: +(e.currentTarget as HTMLInputElement).value })}
+                    />
+                    <button className="nc-pm" disabled={cpuAuto}
+                      onClick={() => void applyCustomFanSettings({ cpuSpeed: cpuSlider + 10 })}>+</button>
+                  </div>
+                  <button
+                    className={`nc-autobtn${cpuAuto ? ' on' : ''}`}
+                    onClick={() => void applyCustomFanSettings({ cpuAuto: !cpuAuto })}
+                  >Auto</button>
+                </div>
+              ) : (
+                <span className="nc-dlabel left">CPU</span>
+              )}
               <div className="nc-dial">
                 <div className={`nc-spin${dialFast ? ' fast' : ''}`} style={{ animationDuration: spinDur }}>
                   <FanRing active={dialActive} size={138} />
@@ -978,7 +1004,7 @@ export default function NitroApp() {
 
             <div className="nc-dsep" />
 
-            {/* GPU */}
+            {/* GPU group */}
             <div className="nc-dgrp">
               <div className="nc-dial">
                 <div className={`nc-spin${dialFast ? ' fast' : ''}`} style={{ animationDuration: spinDur }}>
@@ -989,45 +1015,35 @@ export default function NitroApp() {
                   <span className="nc-runit">RPM</span>
                 </div>
               </div>
-              <span className="nc-dlabel right">GPU</span>
+              {isCustom ? (
+                <div className="nc-inline-ctrl">
+                  <span className="nc-cname">GPU</span>
+                  <div className="nc-slider-row">
+                    <button className="nc-pm" disabled={gpuAuto}
+                      onClick={() => void applyCustomFanSettings({ gpuSpeed: gpuSlider - 10 })}>−</button>
+                    <input
+                      type="range" min={0} max={100} step={10} value={gpuSlider}
+                      className="nc-slider" disabled={gpuAuto}
+                      style={gpuAuto ? undefined : {
+                        background: `linear-gradient(to right,var(--red) 0%,var(--red) ${gpuSlider}%,#3a3a3a ${gpuSlider}%,#3a3a3a 100%)`
+                      }}
+                      onChange={e => setGpuSlider(Math.round(+e.target.value / 10) * 10)}
+                      onPointerUp={e => void applyCustomFanSettings({ gpuSpeed: +(e.currentTarget as HTMLInputElement).value })}
+                      onKeyUp={e => void applyCustomFanSettings({ gpuSpeed: +(e.currentTarget as HTMLInputElement).value })}
+                    />
+                    <button className="nc-pm" disabled={gpuAuto}
+                      onClick={() => void applyCustomFanSettings({ gpuSpeed: gpuSlider + 10 })}>+</button>
+                  </div>
+                  <button
+                    className={`nc-autobtn${gpuAuto ? ' on' : ''}`}
+                    onClick={() => void applyCustomFanSettings({ gpuAuto: !gpuAuto })}
+                  >Auto</button>
+                </div>
+              ) : (
+                <span className="nc-dlabel right">GPU</span>
+              )}
             </div>
           </div>
-
-          {/* ── Custom fan sliders (appear when Custom is selected) ── */}
-          {isCustom && (
-            <div className="nc-custom">
-              {/* CPU slider row */}
-              <div className="nc-crow">
-                <span className="nc-cname">CPU</span>
-                <button className="nc-pm" disabled={cpuAuto}
-                  onClick={() => void applyCustomFanSettings({ cpuSpeed: cpuSlider - 10 })}>−</button>
-                <input type="range" min={0} max={100} step={10} value={cpuSlider}
-                  className="nc-slider" disabled={cpuAuto}
-                  onChange={e => setCpuSlider(Math.round(+e.target.value / 10) * 10)}
-                  onPointerUp={e => void applyCustomFanSettings({ cpuSpeed: +(e.currentTarget as HTMLInputElement).value })}
-                  onKeyUp={e => void applyCustomFanSettings({ cpuSpeed: +(e.currentTarget as HTMLInputElement).value })} />
-                <button className="nc-pm" disabled={cpuAuto}
-                  onClick={() => void applyCustomFanSettings({ cpuSpeed: cpuSlider + 10 })}>+</button>
-                <span className="nc-pct">{cpuSlider}%</span>
-                <button className={`nc-autobtn${cpuAuto ? ' on' : ''}`} onClick={() => void applyCustomFanSettings({ cpuAuto: !cpuAuto })}>Auto</button>
-              </div>
-              {/* GPU slider row */}
-              <div className="nc-crow">
-                <span className="nc-cname">GPU</span>
-                <button className="nc-pm" disabled={gpuAuto}
-                  onClick={() => void applyCustomFanSettings({ gpuSpeed: gpuSlider - 10 })}>−</button>
-                <input type="range" min={0} max={100} step={10} value={gpuSlider}
-                  className="nc-slider" disabled={gpuAuto}
-                  onChange={e => setGpuSlider(Math.round(+e.target.value / 10) * 10)}
-                  onPointerUp={e => void applyCustomFanSettings({ gpuSpeed: +(e.currentTarget as HTMLInputElement).value })}
-                  onKeyUp={e => void applyCustomFanSettings({ gpuSpeed: +(e.currentTarget as HTMLInputElement).value })} />
-                <button className="nc-pm" disabled={gpuAuto}
-                  onClick={() => void applyCustomFanSettings({ gpuSpeed: gpuSlider + 10 })}>+</button>
-                <span className="nc-pct">{gpuSlider}%</span>
-                <button className={`nc-autobtn${gpuAuto ? ' on' : ''}`} onClick={() => void applyCustomFanSettings({ gpuAuto: !gpuAuto })}>Auto</button>
-              </div>
-            </div>
-          )}
         </div>{/* end fan panel */}
 
         {/* ── BOTTOM ROW ────────────────────────────────────────────────── */}

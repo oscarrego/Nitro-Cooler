@@ -108,7 +108,7 @@ unsafe extern "system" fn enum_windows_for_existing_app(hwnd: HWND, lparam: LPAR
     }
 
     if process_path_matches(process_id, &context.app_exe)
-        && window_title(hwnd).contains("AeroForge Control")
+        && !window_title(hwnd).is_empty()
     {
         context.hwnd = hwnd;
         return 0;
