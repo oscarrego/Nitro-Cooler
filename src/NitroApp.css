@@ -528,7 +528,7 @@ html, body, #root {
 .nc-pplan__inner {
   flex: 1;
   display: flex; flex-direction: column;
-  padding: 30px 12px 8px;
+  padding: 46px 12px 10px;
 }
 
 .nc-mlbl { font-size: 11px; color: var(--text-dim); margin-bottom: 6px; letter-spacing: 0.02em; }
@@ -540,7 +540,7 @@ html, body, #root {
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: 3px;
   padding: 2px;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
 .nc-actab {
   flex: 1;
