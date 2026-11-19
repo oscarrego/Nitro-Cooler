@@ -9,15 +9,15 @@
   --panel:        #151617;
   --panel-hover:  #2a2b2c;
   --border:       rgba(255,255,255,0.09);
-  --red:          #e84a1a;
-  --red-dim:      rgba(232,74,26,0.18);
-  --red-glow:     rgba(232,74,26,0.45);
+  --red:          #c42828;
+  --red-dim:      rgba(196,40,40,0.18);
+  --red-glow:     rgba(196,40,40,0.45);
   --text:         #e0e0e0;        /* bright enough to read */
   --text-mid:     #aaaaaa;        /* medium items */
   --text-dim:     #787878;        /* dimmed / secondary */
   --text-off:     #505050;        /* inactive list items */
-  --text-red:     #ff5533;
-  --text-orange:  #f07030;
+  --text-red:     #c42828;
+  --text-orange:  #c42828;
 }
 
 html, body, #root {
@@ -122,7 +122,7 @@ html, body, #root {
   -webkit-app-region: no-drag;
 }
 .nc-ibtn:hover { color: #fff; background: rgba(255,255,255,0.09); }
-.nc-ibtn.active { color: #fff; background: rgba(232,74,26,0.18); }
+.nc-ibtn.active { color: #fff; background: rgba(196,40,40,0.18); }
 .nc-ibtn.close:hover { color: #fff; background: #c42b1c; }
 
 /* ── Advanced settings popover ─────────────────────────────── */
@@ -203,12 +203,12 @@ html, body, #root {
 .nc-lighting__head { display: flex; align-items: center; justify-content: space-between; padding-right: 38px; }
 .nc-lighting h2 { font-size: 17px; font-weight: 600; margin: 0; }
 .nc-lighting__brightness { display: flex; align-items: center; gap: 9px; color: #aaa; }
-.nc-lighting__brightness input { width: 150px; accent-color: #e33a12; }
+.nc-lighting__brightness input { width: 150px; accent-color: #c42828; }
 .nc-lighting__modes { display: flex; gap: 18px; margin: 16px 0 13px; }
 .nc-lighting__modes button { border: 0; padding: 0; background: transparent; color: #777; font: 14px/1.2 inherit; cursor: pointer; }
 .nc-lighting__modes button::before { content: ''; display: inline-block; width: 13px; height: 13px; margin-right: 7px; vertical-align: -2px; background: #444; clip-path: polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%); }
-.nc-lighting__modes button.on { color: #e65331; }
-.nc-lighting__modes button.on::before { background: #f01818; box-shadow: 0 0 8px #e11; }
+.nc-lighting__modes button.on { color: #c42828; }
+.nc-lighting__modes button.on::before { background: #c42828; box-shadow: 0 0 8px #c42828; }
 .nc-lighting__modes button:disabled { cursor: not-allowed; opacity: .52; }
 .nc-lighting__modes small { color: #666; font-size: 10px; margin-left: 3px; }
 .nc-keyboard { padding: 20px 28px; display: grid; grid-template-columns: repeat(12, 1fr); gap: 5px; background: #0d0e0f; border: 1px solid #202224; }
@@ -305,7 +305,7 @@ html, body, #root {
   transition: transform 0.2s, background 0.2s;
   box-shadow: 0 1px 3px rgba(0,0,0,0.5);
 }
-.nc-toggle input:checked ~ .nc-toggle__t { background: #d83f12; box-shadow: 0 0 10px rgba(232,74,26,0.5); }
+.nc-toggle input:checked ~ .nc-toggle__t { background: #c42828; box-shadow: 0 0 10px rgba(196,40,40,0.5); }
 .nc-toggle input:checked ~ .nc-toggle__t::before { transform: translateX(20px); background: #fff; }
 
 /* Fan mode list */
@@ -336,7 +336,7 @@ html, body, #root {
 .nc-mbtn.on {
   color: var(--red);
   border-left: 3px solid var(--red);
-  background: linear-gradient(90deg,rgba(232,74,26,.14),transparent);
+  background: linear-gradient(90deg,rgba(196,40,40,.14),transparent);
 }
 
 /* Vertical divider */
@@ -485,7 +485,7 @@ html, body, #root {
 
 .nc-autobtn {
   font-size: 10px; padding: 2px 12px;
-  border: 1px solid rgba(232,74,26,0.45);
+  border: 1px solid rgba(196,40,40,0.45);
   background: transparent; color: var(--red);
   border-radius: 11px;
   cursor: pointer;
@@ -495,15 +495,15 @@ html, body, #root {
   align-self: flex-start;
   letter-spacing: 0.03em;
 }
-.nc-autobtn:hover { background: rgba(232,74,26,0.12); }
+.nc-autobtn:hover { background: rgba(196,40,40,0.12); }
 .nc-autobtn.on { background: var(--red); color: #fff; border-color: var(--red); }
 
 .nc-fan-switch { width: 48px; height: 25px; position: relative; display: block; cursor: pointer; }
 .nc-fan-switch input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; margin: 0; cursor: pointer; z-index: 1; }
 .nc-fan-switch span { position: absolute; inset: 0; background: #35383a; border: 1px solid #56595b; clip-path: polygon(13% 0,87% 0,100% 50%,87% 100%,13% 100%,0 50%); transition: background .16s,border-color .16s; }
 .nc-fan-switch span::after { content: ''; position: absolute; width: 17px; height: 17px; left: 4px; top: 3px; background: #929597; clip-path: polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%); transition: transform .16s,background .16s; }
-.nc-fan-switch.on span { background: #79502d; border-color: #a97743; }
-.nc-fan-switch.on span::after { transform: translateX(20px); background: #e5ad70; }
+.nc-fan-switch.on span { background: #4a1414; border-color: #7a1d1d; }
+.nc-fan-switch.on span::after { transform: translateX(20px); background: #c42828; }
 .nc-fan-switch:focus-within span { outline: 2px solid #fff; outline-offset: 3px; }
 
 
@@ -604,7 +604,7 @@ html, body, #root {
   background-color: #090909;
   background-image: linear-gradient(rgba(180,0,0,.18) 1px,transparent 1px),linear-gradient(90deg,rgba(180,0,0,.18) 1px,transparent 1px);
   background-size: 16px 16px;
-  border: 1px solid rgba(200,50,0,.18);
+  border: 1px solid rgba(196,40,40,.18);
 }
 .nc-chart__lbl {
   position: absolute; top: 4px; left: 6px;
@@ -620,8 +620,8 @@ canvas { display: block; width: 100%; height: 100%; }
   align-items: flex-end; justify-content: center;
   min-width: 54px;
 }
-.nc-chart__t { font-size: 24px; font-weight: 700; color: #ff5533; line-height: 1.1; letter-spacing: -0.02em; }
-.nc-chart__l { font-size: 17px; font-weight: 600; color: #f07030; line-height: 1.1; }
+.nc-chart__t { font-size: 24px; font-weight: 700; color: #c42828; line-height: 1.1; letter-spacing: -0.02em; }
+.nc-chart__l { font-size: 17px; font-weight: 600; color: #c42828; line-height: 1.1; }
 
 /* Fan icon SVG wrapper */
 .nc-ficon { flex-shrink: 0; display: block; }

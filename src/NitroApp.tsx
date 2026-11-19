@@ -191,10 +191,10 @@ function FanIcon({ on }: { on: boolean }) {
     const qx = cx + 8 * Math.cos(am), qy = cy + 8 * Math.sin(am)
     blades.push(`M${cx},${cy} L${sx},${sy} Q${qx},${qy} ${tx},${ty}Z`)
   }
-  const col = on ? '#e84a1a' : '#555'
+  const col = on ? '#c42828' : '#555'
   return (
     <svg viewBox="0 0 28 28" width={28} height={28} className="nc-ficon">
-      <circle cx={cx} cy={cy} r={12} fill="none" stroke={on ? 'rgba(232,74,26,0.55)' : '#2e2e2e'} strokeWidth="1.2" />
+      <circle cx={cx} cy={cy} r={12} fill="none" stroke={on ? 'rgba(196,40,40,0.55)' : '#2e2e2e'} strokeWidth="1.2" />
       {blades.map((d, i) => <path key={i} d={d} fill={col} opacity={0.9} />)}
       <circle cx={cx} cy={cy} r={3} fill={col} />
     </svg>
