@@ -351,6 +351,22 @@ export default function NitroApp() {
   const [cpuAuto,      setCpuAuto]      = useState(false)
   const [gpuAuto,      setGpuAuto]      = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+
+  // Transient mode indicator below High-Performance
+  const [indicatorText, setIndicatorText] = useState('')
+  const [indicatorVisible, setIndicatorVisible] = useState(false)
+  const indTimerRef = useRef<number | null>(null)
+
+  const showIndicator = (text: string) => {
+    if (indTimerRef.current !== null) {
+      window.clearTimeout(indTimerRef.current)
+    }
+    setIndicatorText(text)
+    setIndicatorVisible(true)
+    indTimerRef.current = window.setTimeout(() => {
+      setIndicatorVisible(false)
+    }, 2200)
+  }
   const [stickyKeys,   setStickyKeys]   = useState(false)
   const [winMenuKeys,  setWinMenuKeys]  = useState(true)
   const [fahrenheit,   setFahrenheit]   = useState(false)
@@ -961,7 +977,10 @@ export default function NitroApp() {
               <button
                 key={m.id}
                 className={`nc-mbtn${fanProfile === m.id ? ' on' : ''}`}
-                onClick={() => void handleFan(m.id)}
+                onClick={() => {
+                  showIndicator(`${m.label} Mode`)
+                  void handleFan(m.id)
+                }}
               >
                 <FanIcon on={fanProfile === m.id} />
                 {m.label}
@@ -1067,13 +1086,19 @@ export default function NitroApp() {
                   <button
                     key={p.id}
                     className={`nc-pitem${powerProfile === p.id ? ' on' : ''}`}
-                    onClick={() => void handlePower(p.id)}
+                    onClick={() => {
+                      showIndicator(p.id === 'battery-guard' ? 'Power Saver' : `${p.label} Mode`)
+                      void handlePower(p.id)
+                    }}
                   >
                     {p.label.split('\n').map((ln, i) => (
                       <span key={i} style={i > 0 ? { display:'block', fontSize:11 } : undefined}>{ln}</span>
                     ))}
                   </button>
                 ))}
+              </div>
+              <div className={`nc-mode-indicator${indicatorVisible ? ' visible' : ''}`}>
+                {indicatorText}
               </div>
             </div>
           </div>
