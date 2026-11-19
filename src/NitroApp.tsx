@@ -1,4 +1,4 @@
-/**
+﻿/**
  * NITRO COOLER — Production UI
  * • Fan/power changes persist to disk via saveControlSnapshot
  * • Settings survive app close and restore on next launch via bootstrap
@@ -88,7 +88,7 @@ function toCurves(c: Curves): ControlSnapshot['fanCurves'] {
 }
 
 // ─── Fan Ring SVG ──────────────────────────────────────────────────────────────
-function FanRing({ active, size = 138 }: { active: boolean; size?: number }) {
+function FanRing({ active, size = 150, spinDuration }: { active: boolean; size?: number; spinDuration: string }) {
   const cx = size / 2, cy = size / 2
   const OR = size / 2 - 2    // outer
   const TR = OR - 11          // tooth inner
@@ -171,13 +171,15 @@ function FanRing({ active, size = 138 }: { active: boolean; size?: number }) {
       ))}
 
       {/* Blades */}
-      {blades.map((d, i) => (
-        <path key={i} d={d}
-          fill={active ? '#747474' : '#252525'}
-          stroke={active ? 'rgba(210,210,210,0.58)' : 'rgba(255,255,255,0.10)'}
-          strokeWidth="0.55"
-        />
-      ))}
+      <g className="nc-spin" style={{ animationDuration: spinDuration }}>
+        {blades.map((d, i) => (
+          <path key={i} d={d}
+            fill={active ? '#929292' : '#505050'}
+            stroke={active ? 'rgba(230,230,230,0.72)' : 'rgba(255,255,255,0.22)'}
+            strokeWidth="0.65"
+          />
+        ))}
+      </g>
 
       {/* Hub */}
       <circle cx={cx} cy={cy} r={HR}
@@ -224,11 +226,15 @@ function drawChart(canvas: HTMLCanvasElement, tempH: number[], loadH: number[]) 
   ctx.fillRect(0, 0, W, H)
 
   // Grid
-  ctx.strokeStyle = 'rgba(200,50,0,0.06)'
+  ctx.strokeStyle = 'rgba(210,125,70,0.12)'
   ctx.lineWidth = 1
   for (let i = 1; i < 8; i++) {
     const x = Math.round((W * i) / 8)
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke()
+  }
+  for (let i = 1; i < 4; i++) {
+    const y = Math.round((H * i) / 4)
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke()
   }
 
   const N    = tempH.length
@@ -267,16 +273,34 @@ function drawChart(canvas: HTMLCanvasElement, tempH: number[], loadH: number[]) 
     ctx.beginPath(); ctx.moveTo(x, H); ctx.lineTo(x, H - th); ctx.stroke()
   }
 
-  // Phase 3 — smooth temperature line
-  ctx.beginPath()
+  // Phase 3 — temperature area and crisp trace, kept distinct from the load bars.
+  const points: { x: number; y: number }[] = []
   for (let i = 0; i < N; i++) {
     const x = (i + GLEN - N) * step
     const y = H - clamp((tempH[i] - 20) / 80, 0, 1) * H
-    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
+    points.push({ x, y })
   }
-  ctx.strokeStyle = 'rgba(255,165,55,0.78)'
-  ctx.lineWidth   = 1.5
+  const area = ctx.createLinearGradient(0, 0, 0, H)
+  area.addColorStop(0, 'rgba(255,145,45,0.23)')
+  area.addColorStop(1, 'rgba(255,95,25,0.015)')
+  ctx.beginPath()
+  points.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y))
+  ctx.lineTo(points.at(-1)!.x, H)
+  ctx.lineTo(points[0].x, H)
+  ctx.closePath()
+  ctx.fillStyle = area
+  ctx.fill()
+  ctx.beginPath()
+  points.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y))
+  ctx.strokeStyle = 'rgba(255,174,76,0.96)'
+  ctx.lineWidth   = 2
+  ctx.shadowColor = 'rgba(255,105,25,0.65)'
+  ctx.shadowBlur = 5
   ctx.stroke()
+  ctx.shadowBlur = 0
+  const last = points.at(-1)!
+  ctx.beginPath(); ctx.arc(last.x, last.y, 3, 0, Math.PI * 2)
+  ctx.fillStyle = '#ffd08a'; ctx.fill()
 }
 
 // ─── Chart Row Component ───────────────────────────────────────────────────────
@@ -292,8 +316,6 @@ function ChartRow({ label, tempH, loadH, curT, curL, minT, maxT, fahrenheit }:
     const { width: w, height: h } = wr.getBoundingClientRect()
     cv.width  = Math.round(w * dpr)
     cv.height = Math.round(h * dpr)
-    const ctx = cv.getContext('2d')
-    ctx?.scale(dpr, dpr)
     drawChart(cv, tempH, loadH)
   }, [tempH, loadH])
 
@@ -334,14 +356,14 @@ function SettingSwitch({ label, checked, onChange }: { label: string; checked: b
 export default function NitroApp() {
 
   // UI state
-  const [fanProfile,   setFanProfile]   = useState<FanProfile>('auto')
+  const [fanProfile,   setFanProfile]   = useState<FanProfile>('custom')
+  const fanProfileRef = useRef<FanProfile>('custom')
   const [powerProfile, setPowerProfile] = useState<PowerProfile>('battery-guard')
   const [acMode,       setAcMode]       = useState<AcMode>('ac')
-  const [coolBoost,    setCoolBoost]    = useState(true)
   const [cpuSlider,    setCpuSlider]    = useState(50)
   const [gpuSlider,    setGpuSlider]    = useState(50)
-  const [cpuAuto,      setCpuAuto]      = useState(true)
-  const [gpuAuto,      setGpuAuto]      = useState(true)
+  const [cpuAuto,      setCpuAuto]      = useState(false)
+  const [gpuAuto,      setGpuAuto]      = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [stickyKeys,   setStickyKeys]   = useState(false)
   const [winMenuKeys,  setWinMenuKeys]  = useState(true)
@@ -391,10 +413,9 @@ export default function NitroApp() {
 
   // Refs
   const svcRef   = useRef(false)
-  const fanRef   = useRef(false)
   const pwrRef   = useRef(false)
   const ctlN     = useRef(0)
-  const qFan     = useRef<FanProfile | null>(null)
+  const fanApplyQueue = useRef<Promise<void>>(Promise.resolve())
   const qPwr     = useRef<PowerProfile | null>(null)
   const curvesR  = useRef<Curves>(DEF_CURVES)
   const telSnap  = useRef<string | null>(null)
@@ -414,7 +435,6 @@ export default function NitroApp() {
   // Fan RPM for display (live preferred, else simulated)
   const cpuRpm = cpuFanRpm ?? (fanProfile === 'max' ? 4950 : fanProfile === 'auto' ? 2173 : Math.round(cpuSlider * 48 + 200))
   const gpuRpm = gpuFanRpm ?? (fanProfile === 'max' ? 5110 : fanProfile === 'auto' ? 2542 : Math.round(gpuSlider * 52 + 220))
-  const dialFast   = fanProfile === 'max' || coolBoost
   const dialActive = fanProfile !== 'auto' || (cpuFanRpm ?? 0) > 500
 
   // ── Update monitoring history ─────────────────────────────────────────────
@@ -444,6 +464,7 @@ export default function NitroApp() {
   // ── Apply control snapshot from backend ───────────────────────────────────
   function applySnap(c: ControlSnapshot, live?: LiveControlSnapshot|null) {
     setFanProfile(c.activeFanProfile)
+    fanProfileRef.current = c.activeFanProfile
     setPowerProfile(c.activePowerProfile)
     const cv = fromCurves(c.fanCurves)
     setCurves(cv); curvesR.current = cv
@@ -462,7 +483,6 @@ export default function NitroApp() {
     setBootArt(c.personalSettings.selectedBootArt)
     setBootFile(c.personalSettings.customBootFilename)
     setUpdOnLaunch(c.personalSettings.checkForUpdatesOnLaunch)
-    setCoolBoost(c.personalSettings.coolBoostEnabled ?? true)
     setCpuAuto(c.personalSettings.customCpuAutoEnabled ?? true)
     setGpuAuto(c.personalSettings.customGpuAutoEnabled ?? true)
     setCpuSlider(c.personalSettings.customCpuSpeedPercent ?? 50)
@@ -512,6 +532,8 @@ export default function NitroApp() {
       fanCurves: toCurves(curvesR.current),
       fanSyncLockEnabled: fanSync,
       personalSettings: {
+        // Retain the required legacy preference field while CoolBoost is removed from the UI.
+        coolBoostEnabled: false,
         smartChargingEnabled: smartChg,
         usbPowerEnabled: usbPwr,
         processorStateControlEnabled: pCtrl,
@@ -524,7 +546,6 @@ export default function NitroApp() {
         customBootFilename: bootFile,
         updateChannel: updateCh,
         checkForUpdatesOnLaunch: updOnLaunch,
-        coolBoostEnabled: coolBoost,
         customCpuAutoEnabled: cpuAuto,
         customGpuAutoEnabled: gpuAuto,
         customCpuSpeedPercent: cpuSlider,
@@ -552,7 +573,7 @@ export default function NitroApp() {
   const persist = useCallback(async (overrides: SnapshotOverrides = {}) => {
     try { await saveControlSnapshot(buildPayload(overrides)) } catch { /* non-fatal */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [powerProfile, fanProfile, custPState, custPBase, gpuTuning, ocSlot, ocState, ocLocked, fanSync, smartChg, usbPwr, pCtrl, nvTel, keepWarm, blFilter, arBat, arHz, bootArt, bootFile, updateCh, updOnLaunch, coolBoost, cpuAuto, gpuAuto, cpuSlider, gpuSlider, stickyKeys, winMenuKeys, fahrenheit, backlightOff, lightingDynamic, keyboardBrightness, keyboardZones, keyboardColors])
+  }, [powerProfile, fanProfile, custPState, custPBase, gpuTuning, ocSlot, ocState, ocLocked, fanSync, smartChg, usbPwr, pCtrl, nvTel, keepWarm, blFilter, arBat, arHz, bootArt, bootFile, updateCh, updOnLaunch, cpuAuto, gpuAuto, cpuSlider, gpuSlider, stickyKeys, winMenuKeys, fahrenheit, backlightOff, lightingDynamic, keyboardBrightness, keyboardZones, keyboardColors])
 
   // ── Bootstrap + polling ───────────────────────────────────────────────────
   useEffect(() => {
@@ -566,6 +587,30 @@ export default function NitroApp() {
           if (cancelled) return
           svcRef.current = bs.service.connected
           applySnap(bs.controls, bs.liveControls)
+          // Restore the last-saved fan profile (auto, max, or custom) exactly as the user left it.
+          const savedFanProfile = bs.controls.activeFanProfile
+          const saved = bs.controls.personalSettings
+          const snapFanSpeed = (speed: number | undefined) => Math.round(clamp(speed ?? 50, 0, 100) / 25) * 25
+          const savedCpuSpeed = snapFanSpeed(saved.customCpuSpeedPercent)
+          const savedGpuSpeed = snapFanSpeed(saved.customGpuSpeedPercent)
+          if (savedFanProfile === 'custom') {
+            const startupCurves = buildCustomCurves(
+              saved.customCpuAutoEnabled ?? false,
+              saved.customGpuAutoEnabled ?? false,
+              savedCpuSpeed,
+              savedGpuSpeed,
+            )
+            setCurves(startupCurves); curvesR.current = startupCurves
+            void handleFan('custom', undefined, {
+              customCpuAutoEnabled: saved.customCpuAutoEnabled ?? false,
+              customGpuAutoEnabled: saved.customGpuAutoEnabled ?? false,
+              customCpuSpeedPercent: savedCpuSpeed,
+              customGpuSpeedPercent: savedGpuSpeed,
+            })
+          } else {
+            // auto or max — just re-apply the saved profile
+            void handleFan(savedFanProfile)
+          }
           if (bs.telemetry) serial(telSnap, bs.telemetry, setLiveTel)
         } catch {
           // Ignore when running in browser preview
@@ -658,30 +703,27 @@ export default function NitroApp() {
   // ── Fan profile apply ─────────────────────────────────────────────────────
   async function handleFan(id: FanProfile, _overrideMsg?: string, personalSettings?: SnapshotOverrides['personalSettings']) {
     setFanProfile(id)
-
-    // Always persist to disk first (works offline too)
-    await persist({ activeFanProfile: id, personalSettings })
-
-    if (!svcRef.current) {
-      return
+    fanProfileRef.current = id
+    const apply = async () => {
+      await persist({ activeFanProfile: id, personalSettings })
+      if (!svcRef.current) return
+      ctlN.current++
+      try {
+        await waitPaint()
+        const req = id === 'custom'
+          ? applyCustomFanCurves(toCurves(curvesR.current))
+          : applyFanProfile(id)
+        const res = await withTo(req, FAN_TO, `fan ${id}`)
+        if (fanProfileRef.current === id) applySnap(res.controls)
+      } catch {
+        // Preserve the latest selection; a newer queued command may already be pending.
+      } finally {
+        ctlN.current = Math.max(0, ctlN.current - 1)
+      }
     }
-    if (fanRef.current) { qFan.current = id; return }
-    fanRef.current = true; ctlN.current++
-    try {
-      await waitPaint()
-      const req = id === 'custom'
-        ? applyCustomFanCurves(toCurves(curvesR.current))
-        : applyFanProfile(id)
-      const res = await withTo(req, FAN_TO, `fan ${id}`)
-      applySnap(res.controls)
-    } catch {
-      setFanProfile(fanProfile)
-    } finally {
-      fanRef.current = false
-      ctlN.current = Math.max(0, ctlN.current - 1)
-      const q = qFan.current; qFan.current = null
-      if (q && q !== id) void handleFan(q)
-    }
+    const pending = fanApplyQueue.current.then(apply, apply)
+    fanApplyQueue.current = pending.catch(() => {})
+    await pending
   }
 
   // ── Power profile apply ───────────────────────────────────────────────────
@@ -725,43 +767,38 @@ export default function NitroApp() {
   async function applyCustomFanSettings(next: { cpuAuto?: boolean; gpuAuto?: boolean; cpuSpeed?: number; gpuSpeed?: number }) {
     const nextCpuAuto = next.cpuAuto ?? cpuAuto
     const nextGpuAuto = next.gpuAuto ?? gpuAuto
-    // Snap to nearest 10% increment
-    const snap10 = (v: number) => Math.round(clamp(v, 0, 100) / 10) * 10
-    const nextCpuSpeed = snap10(next.cpuSpeed ?? cpuSlider)
-    const nextGpuSpeed = snap10(next.gpuSpeed ?? gpuSlider)
+    // Five selectable positions: 0%, 25%, 50%, 75%, and 100%.
+    const snap25 = (v: number) => Math.round(clamp(v, 0, 100) / 25) * 25
+    const nextCpuSpeed = snap25(next.cpuSpeed ?? cpuSlider)
+    const nextGpuSpeed = snap25(next.gpuSpeed ?? gpuSlider)
     const curves = buildCustomCurves(nextCpuAuto, nextGpuAuto, nextCpuSpeed, nextGpuSpeed)
 
     setFanProfile('custom')
+    fanProfileRef.current = 'custom'
     setCpuAuto(nextCpuAuto); setGpuAuto(nextGpuAuto)
     setCpuSlider(nextCpuSpeed); setGpuSlider(nextGpuSpeed)
     setCurves(curves); curvesR.current = curves
-    await persist({
-      activeFanProfile: 'custom',
-      personalSettings: {
-        customCpuAutoEnabled: nextCpuAuto,
-        customGpuAutoEnabled: nextGpuAuto,
-        customCpuSpeedPercent: nextCpuSpeed,
-        customGpuSpeedPercent: nextGpuSpeed,
-      },
-    })
-
-    if (!svcRef.current) {
-      return
+    const apply = async () => {
+      await persist({
+        activeFanProfile: 'custom',
+        personalSettings: {
+          customCpuAutoEnabled: nextCpuAuto,
+          customGpuAutoEnabled: nextGpuAuto,
+          customCpuSpeedPercent: nextCpuSpeed,
+          customGpuSpeedPercent: nextGpuSpeed,
+        },
+      })
+      if (!svcRef.current) return
+      ctlN.current++
+      try {
+        const result = await withTo(applyCustomFanCurves(toCurves(curves)), FAN_TO, 'custom fan settings')
+        if (fanProfileRef.current === 'custom') applySnap(result.controls)
+      } catch { /* ignore */ }
+      finally { ctlN.current = Math.max(0, ctlN.current - 1) }
     }
-
-    try {
-      const result = await withTo(applyCustomFanCurves(toCurves(curves)), FAN_TO, 'custom fan settings')
-      applySnap(result.controls)
-    } catch {
-      /* ignore */
-    }
-  }
-
-  // CoolBoost uses the service Auto profile, which continuously adjusts both fan
-  // targets from CPU/GPU temperature instead of pinning the fans to maximum.
-  async function handleCoolBoost(on: boolean) {
-    setCoolBoost(on)
-    await handleFan('auto', on ? 'CoolBoost enabled: temperature-based fan control active.' : 'CoolBoost disabled: standard automatic fan control active.', { coolBoostEnabled: on })
+    const pending = fanApplyQueue.current.then(apply, apply)
+    fanApplyQueue.current = pending.catch(() => {})
+    await pending
   }
 
   async function saveAdvancedSetting(setting: SnapshotOverrides['personalSettings']) {
@@ -820,8 +857,10 @@ export default function NitroApp() {
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
-  const spinDur = fanProfile === 'max' ? '0.9s' : coolBoost ? '1.7s' : '5.2s'
   const isCustom = fanProfile === 'custom'
+  const spinDuration = (speed: number) => `${Math.max(0.45, 4.8 - clamp(speed, 0, 100) * 0.042)}s`
+  const cpuSpinDur = spinDuration(fanProfile === 'max' ? 100 : fanProfile === 'auto' || (isCustom && cpuAuto) ? Math.max(18, cpuRpm / 50) : cpuSlider)
+  const gpuSpinDur = spinDuration(fanProfile === 'max' ? 100 : fanProfile === 'auto' || (isCustom && gpuAuto) ? Math.max(18, gpuRpm / 50) : gpuSlider)
 
   return (
     <div className="nc-shell">
@@ -929,16 +968,6 @@ export default function NitroApp() {
         <div className="nc-fan">
           <span className="nc-tab">Fan Control</span>
 
-          {/* CoolBoost toggle */}
-          <div className="nc-cb">
-            <span className="nc-cb__info">ℹ</span>
-            <span className="nc-cb__label">CoolBoost™</span>
-            <label className="nc-toggle">
-              <input type="checkbox" checked={coolBoost} onChange={e => void handleCoolBoost(e.target.checked)} />
-              <span className="nc-toggle__t" />
-            </label>
-          </div>
-
           {/* Fan mode buttons */}
           <div className="nc-modes">
             {([
@@ -968,33 +997,29 @@ export default function NitroApp() {
                 <div className="nc-inline-ctrl">
                   <span className="nc-cname">CPU</span>
                   <div className="nc-slider-row">
-                    <button className="nc-pm" disabled={cpuAuto}
-                      onClick={() => void applyCustomFanSettings({ cpuSpeed: cpuSlider - 10 })}>−</button>
                     <input
-                      type="range" min={0} max={100} step={10} value={cpuSlider}
-                      className="nc-slider" disabled={cpuAuto}
-                      style={cpuAuto ? undefined : {
-                        background: `linear-gradient(to right,var(--red) 0%,var(--red) ${cpuSlider}%,#3a3a3a ${cpuSlider}%,#3a3a3a 100%)`
+                      type="range" min={0} max={100} step={25} value={cpuSlider}
+                      className={`nc-slider${cpuAuto ? ' auto' : ''}`} disabled={cpuAuto}
+                      style={{
+                        background: `linear-gradient(to right,${cpuAuto ? '#777' : 'var(--red)'} 0%,${cpuAuto ? '#777' : 'var(--red)'} ${cpuSlider}%,#343638 ${cpuSlider}%,#343638 100%)`
                       }}
-                      onChange={e => setCpuSlider(Math.round(+e.target.value / 10) * 10)}
+                      onChange={e => setCpuSlider(Math.round(+e.target.value / 25) * 25)}
                       onPointerUp={e => void applyCustomFanSettings({ cpuSpeed: +(e.currentTarget as HTMLInputElement).value })}
                       onKeyUp={e => void applyCustomFanSettings({ cpuSpeed: +(e.currentTarget as HTMLInputElement).value })}
                     />
-                    <button className="nc-pm" disabled={cpuAuto}
-                      onClick={() => void applyCustomFanSettings({ cpuSpeed: cpuSlider + 10 })}>+</button>
+                    <span className={`nc-pct${cpuAuto ? ' auto' : ''}`}>{cpuSlider}%</span>
                   </div>
-                  <button
-                    className={`nc-autobtn${cpuAuto ? ' on' : ''}`}
-                    onClick={() => void applyCustomFanSettings({ cpuAuto: !cpuAuto })}
-                  >Auto</button>
+                  <label className={`nc-fan-switch${cpuAuto ? ' on' : ''}`} aria-label="CPU automatic fan control">
+                    <input type="checkbox" checked={cpuAuto}
+                    onChange={e => void applyCustomFanSettings({ cpuAuto: e.target.checked })} />
+                    <span />
+                  </label>
                 </div>
               ) : (
                 <span className="nc-dlabel left">CPU</span>
               )}
               <div className="nc-dial">
-                <div className={`nc-spin${dialFast ? ' fast' : ''}`} style={{ animationDuration: spinDur }}>
-                  <FanRing active={dialActive} size={138} />
-                </div>
+                <FanRing active={dialActive} spinDuration={cpuSpinDur} />
                 <div className="nc-readout">
                   <span className="nc-rpm">{cpuRpm.toLocaleString()}</span>
                   <span className="nc-runit">RPM</span>
@@ -1007,9 +1032,7 @@ export default function NitroApp() {
             {/* GPU group */}
             <div className="nc-dgrp">
               <div className="nc-dial">
-                <div className={`nc-spin${dialFast ? ' fast' : ''}`} style={{ animationDuration: spinDur }}>
-                  <FanRing active={dialActive} size={138} />
-                </div>
+                <FanRing active={dialActive} spinDuration={gpuSpinDur} />
                 <div className="nc-readout">
                   <span className="nc-rpm">{gpuRpm.toLocaleString()}</span>
                   <span className="nc-runit">RPM</span>
@@ -1019,25 +1042,23 @@ export default function NitroApp() {
                 <div className="nc-inline-ctrl">
                   <span className="nc-cname">GPU</span>
                   <div className="nc-slider-row">
-                    <button className="nc-pm" disabled={gpuAuto}
-                      onClick={() => void applyCustomFanSettings({ gpuSpeed: gpuSlider - 10 })}>−</button>
                     <input
-                      type="range" min={0} max={100} step={10} value={gpuSlider}
-                      className="nc-slider" disabled={gpuAuto}
-                      style={gpuAuto ? undefined : {
-                        background: `linear-gradient(to right,var(--red) 0%,var(--red) ${gpuSlider}%,#3a3a3a ${gpuSlider}%,#3a3a3a 100%)`
+                      type="range" min={0} max={100} step={25} value={gpuSlider}
+                      className={`nc-slider${gpuAuto ? ' auto' : ''}`} disabled={gpuAuto}
+                      style={{
+                        background: `linear-gradient(to right,${gpuAuto ? '#777' : 'var(--red)'} 0%,${gpuAuto ? '#777' : 'var(--red)'} ${gpuSlider}%,#343638 ${gpuSlider}%,#343638 100%)`
                       }}
-                      onChange={e => setGpuSlider(Math.round(+e.target.value / 10) * 10)}
+                      onChange={e => setGpuSlider(Math.round(+e.target.value / 25) * 25)}
                       onPointerUp={e => void applyCustomFanSettings({ gpuSpeed: +(e.currentTarget as HTMLInputElement).value })}
                       onKeyUp={e => void applyCustomFanSettings({ gpuSpeed: +(e.currentTarget as HTMLInputElement).value })}
                     />
-                    <button className="nc-pm" disabled={gpuAuto}
-                      onClick={() => void applyCustomFanSettings({ gpuSpeed: gpuSlider + 10 })}>+</button>
+                    <span className={`nc-pct${gpuAuto ? ' auto' : ''}`}>{gpuSlider}%</span>
                   </div>
-                  <button
-                    className={`nc-autobtn${gpuAuto ? ' on' : ''}`}
-                    onClick={() => void applyCustomFanSettings({ gpuAuto: !gpuAuto })}
-                  >Auto</button>
+                  <label className={`nc-fan-switch${gpuAuto ? ' on' : ''}`} aria-label="GPU automatic fan control">
+                    <input type="checkbox" checked={gpuAuto}
+                    onChange={e => void applyCustomFanSettings({ gpuAuto: e.target.checked })} />
+                    <span />
+                  </label>
                 </div>
               ) : (
                 <span className="nc-dlabel right">GPU</span>
