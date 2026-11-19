@@ -1097,9 +1097,9 @@ export default function NitroApp() {
                   </button>
                 ))}
               </div>
-              <div className={`nc-mode-indicator${indicatorVisible ? ' visible' : ''}`}>
-                {indicatorText}
-              </div>
+            </div>
+            <div className={`nc-mode-indicator${indicatorVisible ? ' visible' : ''}`}>
+              {indicatorText}
             </div>
           </div>
 

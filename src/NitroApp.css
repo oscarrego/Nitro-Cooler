@@ -567,20 +567,21 @@ html, body, #root {
 .nc-pitem:hover { color: var(--text-mid); }
 .nc-pitem.on { color: var(--red); border-left-color: var(--red); }
 
-/* Transient mode indicator below High-Performance */
+/* Transient mode indicator docked at bottom-left corner */
 .nc-mode-indicator {
-  margin-top: 14px;
-  padding: 4px 10px;
+  position: absolute;
+  bottom: 12px;
+  left: 14px;
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.04em;
   color: rgba(255, 255, 255, 0.40);
   opacity: 0;
-  transform: translateY(4px);
+  transform: translateY(3px);
   transition: opacity 0.45s ease, transform 0.45s ease;
   pointer-events: none;
   user-select: none;
-  min-height: 20px;
+  z-index: 5;
 }
 .nc-mode-indicator.visible {
   opacity: 1;
