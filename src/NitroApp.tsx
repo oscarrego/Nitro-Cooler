@@ -95,8 +95,8 @@ function FanRing({ active, size = 150, spinDuration }: { active: boolean; size?:
   // Geometry
   const OR   = size / 2 - 2        // outer disc radius
   const BR   = OR - 4              // blade tip — fills close to outer edge
-  // HR: large inner hub circle — ~44% of disc radius — RPM text sits inside this
-  const HR   = OR * 0.44
+  // HR: inner hub circle — ~50% of disc radius — RPM text sits neatly inside
+  const HR   = OR * 0.50
   const B    = 18                  // blade count
   const id   = `fg${size}`
 
@@ -172,8 +172,8 @@ function FanRing({ active, size = 150, spinDuration }: { active: boolean; size?:
         cx={cx} cy={cy} r={HR}
         fill="none"
         stroke={RED}
-        strokeWidth="1.2"
-        opacity={active ? 0.85 : 0.45}
+        strokeWidth="0.8"
+        opacity={active ? 0.75 : 0.40}
       />
     </svg>
   )

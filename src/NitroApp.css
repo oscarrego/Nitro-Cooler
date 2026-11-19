@@ -393,10 +393,10 @@ html, body, #root {
   pointer-events: none;
 }
 .nc-rpm {
-  font-size: 30px; font-weight: 700; color: #fff;
-  line-height: 1; letter-spacing: -0.03em;
+  font-size: 24px; font-weight: 700; color: #fff;
+  line-height: 1; letter-spacing: -0.02em;
 }
-.nc-runit { font-size: 10px; color: #888; letter-spacing: 0.1em; margin-top: 3px; }
+.nc-runit { font-size: 9px; color: #888; letter-spacing: 0.1em; margin-top: 2px; }
 
 /* ── Inline fan controls (custom mode) ─────────────────────── */
 .nc-inline-ctrl {
