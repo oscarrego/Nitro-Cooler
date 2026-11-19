@@ -26,6 +26,10 @@ const SUB_PROCESSOR: &str = "SUB_PROCESSOR";
 const PROCTHROTTLEMIN: &str = "PROCTHROTTLEMIN";
 const PROCTHROTTLEMAX: &str = "PROCTHROTTLEMAX";
 const SCHEME_CURRENT: &str = "SCHEME_CURRENT";
+// Windows built-in power plan GUIDs
+const WINDOWS_SCHEME_POWER_SAVER: &str = "a1841308-3541-4fab-bc81-f71556f20b4a";
+const WINDOWS_SCHEME_BALANCED: &str = "381b4222-f694-41f0-9685-ff5bb260df2e";
+const WINDOWS_SCHEME_HIGH_PERFORMANCE: &str = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
 
 #[derive(Clone, Copy)]
 enum PowercfgCurrentIndex {
@@ -169,6 +173,8 @@ fn apply_operating_mode(
 ) -> Result<AppliedOperatingMode, Box<dyn std::error::Error + Send + Sync>> {
     match profile_id {
         PowerProfileId::BatteryGuard => {
+            // Switch the Windows power plan to Power Saver for battery-guard mode.
+            let _ = run_powercfg(&["/setactive", WINDOWS_SCHEME_POWER_SAVER]);
             let firmware_detail = apply_acer_platform_profile_or_fallback(
                 "quiet",
                 u64::from(GAMING_PROFILE_QUIET),
@@ -186,13 +192,17 @@ fn apply_operating_mode(
                 detail: format!("{firmware_detail} {direct_hid_detail} {whisper_detail}"),
             })
         }
-        PowerProfileId::Balanced => apply_acer_profile_with_whisper_clear(
-            paths,
-            profile_id,
-            GAMING_PROFILE_BALANCED,
-            false,
-            None,
-        ),
+        PowerProfileId::Balanced => {
+            // Switch Windows power plan back to Balanced.
+            let _ = run_powercfg(&["/setactive", WINDOWS_SCHEME_BALANCED]);
+            apply_acer_profile_with_whisper_clear(
+                paths,
+                profile_id,
+                GAMING_PROFILE_BALANCED,
+                false,
+                None,
+            )
+        }
         PowerProfileId::Performance => apply_acer_profile_with_whisper_clear(
             paths,
             profile_id,
@@ -200,13 +210,17 @@ fn apply_operating_mode(
             false,
             None,
         ),
-        PowerProfileId::Turbo => apply_acer_profile_with_whisper_clear(
-            paths,
-            profile_id,
-            GAMING_PROFILE_TURBO,
-            false,
-            None,
-        ),
+        PowerProfileId::Turbo => {
+            // Switch Windows power plan to High Performance for Turbo.
+            let _ = run_powercfg(&["/setactive", WINDOWS_SCHEME_HIGH_PERFORMANCE]);
+            apply_acer_profile_with_whisper_clear(
+                paths,
+                profile_id,
+                GAMING_PROFILE_TURBO,
+                false,
+                None,
+            )
+        }
         PowerProfileId::Custom => {
             let custom_base = custom_base_profile
                 .cloned()

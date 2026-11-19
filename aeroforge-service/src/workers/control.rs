@@ -121,12 +121,7 @@ pub fn apply_fan_profile(
         );
     }
 
-    if matches!(request.profile_id, FanProfileId::Auto)
-        && matches!(
-            snapshot.active_power_profile,
-            Some(models::PowerProfileId::BatteryGuard)
-        )
-    {
+    if matches!(request.profile_id, FanProfileId::Auto) {
         match fan::apply_quiet_auto_fan_policy(paths, &snapshot, false) {
             Ok(applied) => {
                 state::persist_fan_apply_success(paths, &applied)?;
@@ -453,13 +448,7 @@ fn tick(paths: &ServicePaths) -> Result<(), Box<dyn std::error::Error + Send + S
         return Ok(());
     }
 
-    if matches!(
-        initial_snapshot.active_power_profile,
-        Some(models::PowerProfileId::BatteryGuard)
-    ) && matches!(
-        initial_snapshot.active_fan_profile,
-        Some(FanProfileId::Auto)
-    ) {
+    if matches!(initial_snapshot.active_fan_profile, Some(FanProfileId::Auto)) {
         if !quiet_auto_refresh_due(initial_snapshot.last_fan_applied_at_unix) {
             return Ok(());
         }
@@ -481,11 +470,7 @@ fn tick(paths: &ServicePaths) -> Result<(), Box<dyn std::error::Error + Send + S
             }
         };
 
-        if !matches!(
-            snapshot.active_power_profile,
-            Some(models::PowerProfileId::BatteryGuard)
-        ) || !matches!(snapshot.active_fan_profile, Some(FanProfileId::Auto))
-        {
+        if !matches!(snapshot.active_fan_profile, Some(FanProfileId::Auto)) {
             return Ok(());
         }
 

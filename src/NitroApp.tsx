@@ -43,7 +43,6 @@ const GLEN     = 140
 const PLANS: { id: PowerProfile; label: string }[] = [
   { id: 'battery-guard', label: 'Power Saver' },
   { id: 'balanced',      label: 'Balance' },
-  { id: 'performance',   label: 'Balance\n[Acer Optimized]' },
   { id: 'turbo',         label: 'High-Performance' },
 ]
 
@@ -87,108 +86,142 @@ function toCurves(c: Curves): ControlSnapshot['fanCurves'] {
   }
 }
 
-// ─── Fan Ring SVG ──────────────────────────────────────────────────────────────
+// ─── Fan Ring SVG — NitroSense-style replication ───────────────────────────────
+// Deep black disc · red outer ring · dark curved blades · black hub with red ring
 function FanRing({ active, size = 150, spinDuration }: { active: boolean; size?: number; spinDuration: string }) {
   const cx = size / 2, cy = size / 2
-  const OR = size / 2 - 2    // outer
-  const TR = OR - 11          // tooth inner
-  const BR = OR - 14          // blade reach
-  const HR = size * 0.10      // hub
-  const N  = 0                // no toothed ring: the original uses slim blades
-  const B  = 24               // slim radial fan blades
-  const id = `fg${active ? 'a' : 'i'}${size}`
 
-  // Teeth — arc segments
-  const teeth: string[] = []
-  const tf = 0.66
-  for (let i = 0; i < N; i++) {
-    const a0 = (i / N) * Math.PI * 2
-    const a1 = a0 + (tf / N) * Math.PI * 2
-    const x0o = cx + OR * Math.cos(a0), y0o = cy + OR * Math.sin(a0)
-    const x1o = cx + OR * Math.cos(a1), y1o = cy + OR * Math.sin(a1)
-    const x1i = cx + TR * Math.cos(a1), y1i = cy + TR * Math.sin(a1)
-    const x0i = cx + TR * Math.cos(a0), y0i = cy + TR * Math.sin(a0)
-    const la = tf / N > 0.5 ? 1 : 0
-    teeth.push(`M${x0o},${y0o} A${OR},${OR} 0 ${la} 1 ${x1o},${y1o} L${x1i},${y1i} A${TR},${TR} 0 ${la} 0 ${x0i},${y0i}Z`)
-  }
+  // Geometry
+  const OR   = size / 2 - 3        // outer disc radius
+  const BR   = OR - 6              // blade tip reach (close to outer ring)
+  const HR   = size * 0.165        // hub radius — larger black circle
+  const HRI  = size * 0.055        // inner hub dot radius
+  const B    = 18                  // blade count — matches NitroSense look
+  const id   = `fg${size}`
 
-  // Blades — swept curved shapes
+  // Red accent color
+  const RED        = active ? '#d93030' : '#8a2020'
+  const RED_GLOW   = 'rgba(210,40,40,0.65)'
+  const BLADE_FILL = active ? '#7a7a7a' : '#3e3e3e'
+  const BLADE_EDGE = active ? 'rgba(200,200,200,0.55)' : 'rgba(130,130,130,0.25)'
+
+  // Build swept fan blades — wide curved paddles like NitroSense
   const blades: string[] = []
   for (let i = 0; i < B; i++) {
-    const base  = (i / B) * Math.PI * 2
-    const sweep = 0.73
-    const tip   = base + sweep
-    const sx = cx + (HR + 2) * Math.cos(base), sy = cy + (HR + 2) * Math.sin(base)
-    const tx = cx + (BR - 3) * Math.cos(tip),  ty = cy + (BR - 3) * Math.sin(tip)
-    const m1 = base + sweep * 0.35, m2 = base + sweep * 0.70
-    const c1x = cx + BR * 0.52 * Math.cos(m1), c1y = cy + BR * 0.52 * Math.sin(m1)
-    const c2x = cx + BR * 0.83 * Math.cos(m2), c2y = cy + BR * 0.83 * Math.sin(m2)
-    const te  = base - 0.14
-    const tex = cx + (HR + 2) * Math.cos(te), tey = cy + (HR + 2) * Math.sin(te)
-    const q1x = cx + BR * 0.44 * Math.cos(m1 - 0.08), q1y = cy + BR * 0.44 * Math.sin(m1 - 0.08)
-    blades.push(`M${sx},${sy} C${c1x},${c1y} ${c2x},${c2y} ${tx},${ty} Q${q1x},${q1y} ${tex},${tey}Z`)
+    const base   = (i / B) * Math.PI * 2
+    const sweep  = 1.05             // wide sweep angle
+    const tipAng = base + sweep
+
+    // Blade root (at hub edge) and tip (near outer ring)
+    const r0  = HR + 1
+    const r1  = BR
+    // Leading edge start
+    const sx  = cx + r0 * Math.cos(base),    sy  = cy + r0 * Math.sin(base)
+    // Tip
+    const tx  = cx + r1 * Math.cos(tipAng),  ty  = cy + r1 * Math.sin(tipAng)
+    // Control points for cubic bezier — creates the curved NitroSense blade shape
+    const m1  = base + sweep * 0.3
+    const m2  = base + sweep * 0.65
+    const c1x = cx + (r0 * 1.4) * Math.cos(m1), c1y = cy + (r0 * 1.4) * Math.sin(m1)
+    const c2x = cx + (r1 * 0.80) * Math.cos(m2), c2y = cy + (r1 * 0.80) * Math.sin(m2)
+    // Trailing edge — slightly behind, closes the blade thickness
+    const teAng = base - 0.08
+    const tex   = cx + r0 * Math.cos(teAng), tey = cy + r0 * Math.sin(teAng)
+    const qm    = base + sweep * 0.3
+    const qx    = cx + (r0 * 1.2) * Math.cos(qm), qy = cy + (r0 * 1.2) * Math.sin(qm)
+    blades.push(`M${sx},${sy} C${c1x},${c1y} ${c2x},${c2y} ${tx},${ty} Q${qx},${qy} ${tex},${tey}Z`)
   }
 
   return (
     <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} style={{ display: 'block' }}>
       <defs>
-        <filter id={id} x="-25%" y="-25%" width="150%" height="150%">
-          <feGaussianBlur stdDeviation={active ? '2.5' : '0'} result="blur" />
+        {/* Glow filter for active state */}
+        <filter id={`glow-${id}`} x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="2.5" result="blur" />
           <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
         </filter>
-        {active && (
-          <radialGradient id={`rg${size}`} cx="50%" cy="50%" r="50%">
-            <stop offset="0%"   stopColor="rgba(255,90,20,0.15)" />
-            <stop offset="65%"  stopColor="rgba(200,55,0,0.07)" />
-            <stop offset="100%" stopColor="rgba(0,0,0,0)" />
-          </radialGradient>
-        )}
+        {/* Drop shadow for depth on blades */}
+        <filter id={`shadow-${id}`} x="-10%" y="-10%" width="120%" height="120%">
+          <feDropShadow dx="0.5" dy="1" stdDeviation="1.2" floodColor="rgba(0,0,0,0.85)" />
+        </filter>
+        {/* Radial gradient for disc — deep black with subtle dark edge */}
+        <radialGradient id={`disc-${id}`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%"   stopColor="#1a1a1a" />
+          <stop offset="60%"  stopColor="#111111" />
+          <stop offset="100%" stopColor="#080808" />
+        </radialGradient>
+        {/* Hub gradient — layered black with depth */}
+        <radialGradient id={`hub-${id}`} cx="40%" cy="35%" r="65%">
+          <stop offset="0%"   stopColor="#2c2c2c" />
+          <stop offset="50%"  stopColor="#141414" />
+          <stop offset="100%" stopColor="#060606" />
+        </radialGradient>
       </defs>
 
-      {/* Disc background */}
-      <circle cx={cx} cy={cy} r={OR - 1} fill="#0d0d0d" />
+      {/* ── Outer black disc with subtle gradient depth ── */}
+      <circle cx={cx} cy={cy} r={OR} fill={`url(#disc-${id})`} />
 
-      {/* Radial glow fill */}
-      {active && <circle cx={cx} cy={cy} r={OR - 1} fill={`url(#rg${size})`} />}
+      {/* ── Red outer ring (the signature NitroSense look) ── */}
+      <circle
+        cx={cx} cy={cy} r={OR - 1.5}
+        fill="none"
+        stroke={RED}
+        strokeWidth={active ? "2.2" : "1.6"}
+        filter={active ? `url(#glow-${id})` : undefined}
+        opacity={active ? 1 : 0.6}
+      />
+      {/* Thin inner ring just inside the red ring for depth */}
+      <circle cx={cx} cy={cy} r={OR - 5} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
 
-      {/* Outer glow rings */}
-      {active ? <>
-        <circle cx={cx} cy={cy} r={OR - 2}  fill="none" stroke="rgba(213,112,28,0.78)"  strokeWidth="1.5" filter={`url(#${id})`} />
-        <circle cx={cx} cy={cy} r={OR - 7}  fill="none" stroke="rgba(255,255,255,0.10)"  strokeWidth="1" />
-        <circle cx={cx} cy={cy} r={TR}      fill="none" stroke="rgba(255,255,255,0.06)"  strokeWidth="1" />
-      </> : <>
-        <circle cx={cx} cy={cy} r={OR - 2} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="1.5" />
-      </>}
-
-      {/* Teeth */}
-      {teeth.map((d, i) => (
-        <path key={i} d={d}
-          fill={active
-            ? (i % 2 === 0 ? 'rgba(255,105,25,0.88)' : 'rgba(205,65,10,0.68)')
-            : (i % 2 === 0 ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.07)')}
-          filter={active ? `url(#${id})` : undefined}
-        />
-      ))}
-
-      {/* Blades */}
+      {/* ── Spinning blade group ── */}
       <g className="nc-spin" style={{ animationDuration: spinDuration }}>
         {blades.map((d, i) => (
-          <path key={i} d={d}
-            fill={active ? '#929292' : '#505050'}
-            stroke={active ? 'rgba(230,230,230,0.72)' : 'rgba(255,255,255,0.22)'}
-            strokeWidth="0.65"
+          <path
+            key={i} d={d}
+            fill={BLADE_FILL}
+            stroke={BLADE_EDGE}
+            strokeWidth="0.8"
+            filter={`url(#shadow-${id})`}
           />
         ))}
       </g>
 
-      {/* Hub */}
-      <circle cx={cx} cy={cy} r={HR}
-        fill={active ? '#151515' : '#161616'}
-        stroke={active ? 'rgba(213,112,28,0.68)' : 'rgba(255,255,255,0.08)'}
-        strokeWidth="1.5"
-        filter={active ? `url(#${id})` : undefined}
+      {/* ── Black hub circle — sits on top of blades for depth ── */}
+      <circle
+        cx={cx} cy={cy} r={HR}
+        fill={`url(#hub-${id})`}
       />
-      <circle cx={cx} cy={cy} r={4} fill={active ? '#bd6a20' : '#2a2a2a'} filter={active ? `url(#${id})` : undefined} />
+
+      {/* ── Red hub outline ring ── */}
+      <circle
+        cx={cx} cy={cy} r={HR}
+        fill="none"
+        stroke={RED}
+        strokeWidth={active ? "1.8" : "1.3"}
+        filter={active ? `url(#glow-${id})` : undefined}
+        opacity={active ? 0.95 : 0.55}
+      />
+
+      {/* ── Inner hub rim ring (depth) ── */}
+      <circle cx={cx} cy={cy} r={HR - 4} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
+
+      {/* ── Centre dot ── */}
+      <circle cx={cx} cy={cy} r={HRI}
+        fill={active ? '#1e1e1e' : '#141414'}
+        stroke={active ? 'rgba(220,50,50,0.5)' : 'rgba(255,255,255,0.08)'}
+        strokeWidth="1"
+      />
+
+      {/* ── Active glow halo around outer ring ── */}
+      {active && (
+        <circle cx={cx} cy={cy} r={OR + 2}
+          fill="none"
+          stroke={RED_GLOW}
+          strokeWidth="4"
+          opacity="0.35"
+          filter={`url(#glow-${id})`}
+        />
+      )}
     </svg>
   )
 }
@@ -594,16 +627,13 @@ export default function NitroApp() {
           const savedCpuSpeed = snapFanSpeed(saved.customCpuSpeedPercent)
           const savedGpuSpeed = snapFanSpeed(saved.customGpuSpeedPercent)
           if (savedFanProfile === 'custom') {
-            const startupCurves = buildCustomCurves(
-              saved.customCpuAutoEnabled ?? false,
-              saved.customGpuAutoEnabled ?? false,
-              savedCpuSpeed,
-              savedGpuSpeed,
-            )
+            // Auto toggles always start OFF — sliders remember their saved values.
+            const startupCurves = buildCustomCurves(false, false, savedCpuSpeed, savedGpuSpeed)
+            setCpuAuto(false); setGpuAuto(false)
             setCurves(startupCurves); curvesR.current = startupCurves
             void handleFan('custom', undefined, {
-              customCpuAutoEnabled: saved.customCpuAutoEnabled ?? false,
-              customGpuAutoEnabled: saved.customGpuAutoEnabled ?? false,
+              customCpuAutoEnabled: false,
+              customGpuAutoEnabled: false,
               customCpuSpeedPercent: savedCpuSpeed,
               customGpuSpeedPercent: savedGpuSpeed,
             })
@@ -1074,7 +1104,7 @@ export default function NitroApp() {
           <div className="nc-pplan">
             <span className="nc-tab">Power Plan</span>
             <div className="nc-pplan__inner">
-              <div className="nc-mlbl">Mode</div>
+
               <div className="nc-actabs">
                 <button className={`nc-actab${acMode === 'ac' ? ' on' : ''}`} onClick={() => setAcMode('ac')}>AC</button>
                 <button className={`nc-actab${acMode === 'battery' ? ' on' : ''}`} onClick={() => setAcMode('battery')}>Battery</button>

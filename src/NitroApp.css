@@ -33,13 +33,15 @@ html, body, #root {
 /* ── Shell ──────────────────────────────────────────────────── */
 .nc-shell {
   width:  960px;
-  height: 560px;
+  height: 565px;
+  max-width: 100vw;
+  max-height: 100vh;
   background: repeating-linear-gradient(0deg, rgba(255,255,255,.018) 0 1px, transparent 1px 3px), radial-gradient(ellipse at 50% -25%, #303131 0%, #151617 48%, #0b0c0d 100%);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   border: 1px solid #4a4b4b;
-  border-radius: 18px 18px 29px 29px;
+  border-radius: 0;
   box-shadow: inset 0 0 0 1px rgba(0,0,0,.9), 0 0 0 2px #090909, 0 24px 64px rgba(0,0,0,0.9);
   margin: 0 auto;
   position: relative;
@@ -50,7 +52,7 @@ html, body, #root {
   position: absolute;
   inset: 6px;
   border: 1px solid rgba(215,215,215,.07);
-  border-radius: 13px 13px 23px 23px;
+  border-radius: 0;
   box-shadow: inset 0 0 22px rgba(0,0,0,.42);
   pointer-events: none;
   z-index: 20;
@@ -83,7 +85,10 @@ html, body, #root {
 }
 
 .nc-titlebar__title {
-  flex: 1;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
   text-align: center;
   font-size: 15px;
   letter-spacing: 0.42em;
@@ -101,6 +106,7 @@ html, body, #root {
   gap: 2px;
   min-width: 195px;
   justify-content: flex-end;
+  margin-left: auto;
   -webkit-app-region: no-drag;
 }
 
@@ -254,7 +260,7 @@ html, body, #root {
 .nc-fan {
   background: repeating-linear-gradient(0deg,rgba(255,255,255,.018) 0 1px,transparent 1px 3px),linear-gradient(110deg,#151617,#101112);
   border: 1px solid #373939;
-  border-radius: 8px 8px 23px 23px;
+  border-radius: 0;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.06), inset 0 -16px 22px rgba(0,0,0,.18);
   /* height adapts: collapsed = 200px, expanded (custom) = 244px */
   height: 200px;
@@ -364,18 +370,20 @@ html, body, #root {
 
 /* Dial */
 .nc-dial {
-  width: 138px; height: 138px;
+  width: 150px; height: 150px;
   position: relative;
   flex-shrink: 0;
 }
 .nc-spin {
-  position: absolute; inset: 0;
-  width: 100%; height: 100%;
   animation: nc-spin 3.5s linear infinite;
-  transform-origin: center;
+  transform-box: view-box;
+  transform-origin: 50% 50%;
   will-change: transform;
 }
-@keyframes nc-spin { to { transform: rotate(360deg); } }
+@keyframes nc-spin {
+  from { transform: rotate(0turn); }
+  to { transform: rotate(1turn); }
+}
 .nc-spin.fast { animation-duration: 1.1s; }
 
 .nc-readout {
@@ -444,8 +452,8 @@ html, body, #root {
 .nc-slider {
   flex: 1;
   -webkit-appearance: none;
-  height: 2px;
-  border-radius: 1px;
+  height: 9px;
+  border-radius: 0;
   background: #3a3a3a;
   outline: none;
   cursor: pointer;
@@ -454,16 +462,17 @@ html, body, #root {
 }
 .nc-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 11px; height: 11px;
-  border-radius: 50%;
+  width: 27px; height: 21px;
+  border-radius: 0;
+  clip-path: polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);
   background: var(--red);
   cursor: pointer;
-  box-shadow: 0 0 5px var(--red-glow);
+  box-shadow: 0 0 9px var(--red-glow);
   transition: transform 0.1s;
 }
 .nc-slider::-webkit-slider-thumb:hover { transform: scale(1.25); }
-.nc-slider:disabled { opacity: .3; cursor: default; }
-.nc-slider:disabled::-webkit-slider-thumb { background: #666; box-shadow: none; cursor: default; }
+.nc-slider:disabled { opacity: 1; cursor: default; }
+.nc-slider:disabled::-webkit-slider-thumb { background: #858585; box-shadow: none; cursor: default; }
 
 .nc-pct {
   font-size: 11px;
@@ -472,6 +481,7 @@ html, body, #root {
   text-align: right;
   font-weight: 600;
 }
+.nc-pct.auto { color: #999; }
 
 .nc-autobtn {
   font-size: 10px; padding: 2px 12px;
@@ -488,6 +498,14 @@ html, body, #root {
 .nc-autobtn:hover { background: rgba(232,74,26,0.12); }
 .nc-autobtn.on { background: var(--red); color: #fff; border-color: var(--red); }
 
+.nc-fan-switch { width: 48px; height: 25px; position: relative; display: block; cursor: pointer; }
+.nc-fan-switch input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; margin: 0; cursor: pointer; z-index: 1; }
+.nc-fan-switch span { position: absolute; inset: 0; background: #35383a; border: 1px solid #56595b; clip-path: polygon(13% 0,87% 0,100% 50%,87% 100%,13% 100%,0 50%); transition: background .16s,border-color .16s; }
+.nc-fan-switch span::after { content: ''; position: absolute; width: 17px; height: 17px; left: 4px; top: 3px; background: #929597; clip-path: polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%); transition: transform .16s,background .16s; }
+.nc-fan-switch.on span { background: #79502d; border-color: #a97743; }
+.nc-fan-switch.on span::after { transform: translateX(20px); background: #e5ad70; }
+.nc-fan-switch:focus-within span { outline: 2px solid #fff; outline-offset: 3px; }
+
 
 
 /* ── Bottom row ─────────────────────────────────────────────── */
@@ -501,7 +519,7 @@ html, body, #root {
   width: 218px; flex-shrink: 0;
   background: repeating-linear-gradient(0deg,rgba(255,255,255,.018) 0 1px,transparent 1px 3px),#151617;
   border: 1px solid #373939;
-  border-radius: 8px 8px 18px 18px;
+  border-radius: 0;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.06), inset 0 -12px 20px rgba(0,0,0,.18);
   display: flex; flex-direction: column;
   position: relative;
@@ -555,7 +573,7 @@ html, body, #root {
   flex: 1; min-width: 0;
   background: repeating-linear-gradient(0deg,rgba(255,255,255,.018) 0 1px,transparent 1px 3px),#151617;
   border: 1px solid #373939;
-  border-radius: 8px 8px 18px 18px;
+  border-radius: 0;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.06), inset 0 -12px 20px rgba(0,0,0,.18);
   display: flex; flex-direction: column;
   position: relative;
@@ -581,7 +599,7 @@ html, body, #root {
 .nc-chart__wrap {
   flex: 1; min-width: 0;
   position: relative;
-  border-radius: 2px;
+  border-radius: 0;
   overflow: hidden;
   background-color: #090909;
   background-image: linear-gradient(rgba(180,0,0,.18) 1px,transparent 1px),linear-gradient(90deg,rgba(180,0,0,.18) 1px,transparent 1px);
