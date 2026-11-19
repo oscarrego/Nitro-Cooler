@@ -112,7 +112,7 @@ function FanRing({ active, size = 150, spinDuration }: { active: boolean; size?:
     const base   = (i / B) * Math.PI * 2
     const sweep  = 1.05
     const tipAng = base + sweep
-    const r0  = HR + 1
+    const r0  = HR * 0.55   // blades root inside hub — hub/red ring overlaps them
     const r1  = BR
     const sx  = cx + r0 * Math.cos(base),    sy  = cy + r0 * Math.sin(base)
     const tx  = cx + r1 * Math.cos(tipAng),  ty  = cy + r1 * Math.sin(tipAng)
