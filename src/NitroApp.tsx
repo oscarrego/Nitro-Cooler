@@ -120,9 +120,9 @@ function FanRing({ active, size = 150, spinDuration }: { active: boolean; size?:
     const m2  = base + sweep * 0.65
     const c1x = cx + (r0 * 1.4) * Math.cos(m1), c1y = cy + (r0 * 1.4) * Math.sin(m1)
     const c2x = cx + (r1 * 0.80) * Math.cos(m2), c2y = cy + (r1 * 0.80) * Math.sin(m2)
-    const q1x = cx + (r1 * 0.81) * Math.cos(m2 - 0.135), q1y = cy + (r1 * 0.81) * Math.sin(m2 - 0.135)
-    const q2x = cx + (r0 * 1.35) * Math.cos(m1 - 0.15),  q2y = cy + (r0 * 1.35) * Math.sin(m1 - 0.15)
-    const teAng = base - 0.11
+    const q1x = cx + (r1 * 0.81) * Math.cos(m2 - 0.162), q1y = cy + (r1 * 0.81) * Math.sin(m2 - 0.162)
+    const q2x = cx + (r0 * 1.35) * Math.cos(m1 - 0.18),  q2y = cy + (r0 * 1.35) * Math.sin(m1 - 0.18)
+    const teAng = base - 0.135
     const tex   = cx + r0 * Math.cos(teAng), tey = cy + r0 * Math.sin(teAng)
     blades.push(`M${sx},${sy} C${c1x},${c1y} ${c2x},${c2y} ${tx},${ty} C${q1x},${q1y} ${q2x},${q2y} ${tex},${tey}Z`)
   }
