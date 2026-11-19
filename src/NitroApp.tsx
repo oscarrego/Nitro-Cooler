@@ -110,21 +110,21 @@ function FanRing({ active, size = 150, spinDuration }: { active: boolean; size?:
   const blades: string[] = []
   for (let i = 0; i < B; i++) {
     const base   = (i / B) * Math.PI * 2
-    const sweep  = 1.05
+    const sweep  = 1.02
     const tipAng = base + sweep
     const r0  = HR * 0.55   // blades root inside hub — hub/red ring overlaps them
     const r1  = BR
     const sx  = cx + r0 * Math.cos(base),    sy  = cy + r0 * Math.sin(base)
     const tx  = cx + r1 * Math.cos(tipAng),  ty  = cy + r1 * Math.sin(tipAng)
-    const m1  = base + sweep * 0.3
-    const m2  = base + sweep * 0.65
-    const c1x = cx + (r0 * 1.4) * Math.cos(m1), c1y = cy + (r0 * 1.4) * Math.sin(m1)
-    const c2x = cx + (r1 * 0.80) * Math.cos(m2), c2y = cy + (r1 * 0.80) * Math.sin(m2)
-    const teAng = base - 0.08
+    const m1  = base + sweep * 0.28
+    const m2  = base + sweep * 0.68
+    const c1x = cx + (r0 * 1.35) * Math.cos(m1), c1y = cy + (r0 * 1.35) * Math.sin(m1)
+    const c2x = cx + (r1 * 0.82) * Math.cos(m2), c2y = cy + (r1 * 0.82) * Math.sin(m2)
+    const q1x = cx + (r1 * 0.83) * Math.cos(m2 - 0.08), q1y = cy + (r1 * 0.83) * Math.sin(m2 - 0.08)
+    const q2x = cx + (r0 * 1.35) * Math.cos(m1 - 0.09), q2y = cy + (r0 * 1.35) * Math.sin(m1 - 0.09)
+    const teAng = base - 0.07
     const tex   = cx + r0 * Math.cos(teAng), tey = cy + r0 * Math.sin(teAng)
-    const qm    = base + sweep * 0.3
-    const qx    = cx + (r0 * 1.2) * Math.cos(qm), qy = cy + (r0 * 1.2) * Math.sin(qm)
-    blades.push(`M${sx},${sy} C${c1x},${c1y} ${c2x},${c2y} ${tx},${ty} Q${qx},${qy} ${tex},${tey}Z`)
+    blades.push(`M${sx},${sy} C${c1x},${c1y} ${c2x},${c2y} ${tx},${ty} C${q1x},${q1y} ${q2x},${q2y} ${tex},${tey}Z`)
   }
 
   return (
@@ -158,7 +158,7 @@ function FanRing({ active, size = 150, spinDuration }: { active: boolean; size?:
             key={i} d={d}
             fill={BLADE_FILL}
             stroke={BLADE_EDGE}
-            strokeWidth="0.7"
+            strokeWidth="0.5"
             filter={`url(#shadow-${id})`}
           />
         ))}
